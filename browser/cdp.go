@@ -16,8 +16,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/cdproto/target"
 	"github.com/chromedp/chromedp"
+	"github.com/chromedp/chromedp/remote"
 )
 
 // Tab identifies an existing Chrome page. CDP TargetInfo does NOT provide a
@@ -35,6 +37,7 @@ type Tab struct {
 type Client struct {
 	endpoint *url.URL
 	http     *http.Client
+	timeout  time.Duration
 }
 
 func NewClient(rawEndpoint string, timeout time.Duration) (*Client, error) {
@@ -53,7 +56,7 @@ func NewClient(rawEndpoint string, timeout time.Duration) (*Client, error) {
 	if timeout <= 0 {
 		return nil, errors.New("CDP timeout must be positive")
 	}
-	return &Client{endpoint: endpoint, http: &http.Client{Timeout: timeout}}, nil
+	return &Client{endpoint: endpoint, http: &http.Client{Timeout: timeout}, timeout: timeout}, nil
 }
 
 func loopbackHost(host string) bool {
@@ -101,13 +104,15 @@ func (c *Client) jsonGET(ctx context.Context, path string, result any) error {
 // It attaches to one ALREADY EXISTING page target, then issues the requested
 // Target.getTargets CDP method and discards the bootstrap snapshot.
 func (c *Client) Discover(ctx context.Context) ([]Tab, error) {
+	ctx, cancel := context.WithTimeout(ctx, c.timeout)
+	defer cancel()
 	var version versionResponse
 	if err := c.jsonGET(ctx, "/json/version", &version); err != nil {
 		return nil, fmt.Errorf("connect to Chrome (start a separate debug profile on port 9222): %w", err)
 	}
 	ws, err := url.Parse(version.WebSocketDebuggerURL)
 	if err != nil || ws.Scheme != "ws" || !loopbackHost(ws.Hostname()) ||
-		ws.User != nil || ws.Port() == "" {
+		ws.User != nil || ws.Port() == "" || ws.Port() != c.endpoint.Port() {
 		return nil, errors.New("Chrome returned an invalid or non-loopback browser WebSocket debugger URL")
 	}
 	var discovered []pageResponse
@@ -126,15 +131,24 @@ func (c *Client) Discover(ctx context.Context) ([]Tab, error) {
 		return []Tab{}, nil
 	}
 
-	allocatorCtx, cancelAllocator := chromedp.NewRemoteAllocator(ctx, ws.String())
+	// Version 0.21 uses chromedp/remote and the typed cdproto Call API.
+	// NoModifyURL prevents a second HTTP URL-resolution request; the browser
+	// debugger URL was validated above as local and on the expected port.
+	allocatorCtx, cancelAllocator := remote.NewAllocator(ctx, ws.String(), remote.NoModifyURL)
 	defer cancelAllocator()
 	tabCtx, cancelTab := chromedp.NewContext(allocatorCtx, chromedp.WithTargetID(target.ID(bootstrapID)))
 	defer cancelTab()
 	var infos []*target.Info
-	if err := chromedp.Run(tabCtx, chromedp.ActionFunc(func(runCtx context.Context) error {
-		var err error
-		infos, err = target.GetTargets().Do(runCtx)
-		return err
+	if err := chromedp.Do(tabCtx, chromedp.Func(func(runCtx context.Context, _ *chromedp.Target) error {
+		// Target is a browser-scope domain. Calling it through the browser
+		// session avoids incorrectly treating this as page instrumentation.
+		result, err := cdp.Call(runCtx, chromedp.FromContext(runCtx).Browser,
+			target.GetTargets, target.GetTargetsParams{})
+		if err != nil {
+			return err
+		}
+		infos = result.TargetInfos
+		return nil
 	})); err != nil {
 		return nil, fmt.Errorf("Target.getTargets (bootstrap target %s): %w", bootstrapID, err)
 	}
@@ -165,8 +179,12 @@ func Domain(raw string) string {
 	if err != nil {
 		return "(invalid)"
 	}
-	if host := u.Hostname(); host != "" {
-		return strings.ToLower(host)
+	// Internal Chrome/file/about URLs have no web domain, even if they
+	// happen to contain a host component in their scheme syntax.
+	if u.Scheme == "http" || u.Scheme == "https" || u.Scheme == "ws" || u.Scheme == "wss" {
+		if host := u.Hostname(); host != "" {
+			return strings.ToLower(host)
+		}
 	}
 	if u.Scheme != "" {
 		return strings.ToLower(u.Scheme) + ":"
