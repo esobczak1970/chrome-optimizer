@@ -1,0 +1,4 @@
+# The DevTools HTTP endpoint must be bound to a loopback address.
+cdp_endpoint: http://127.0.0.1:9222
+timeout: 15s
+default_sort: domain
