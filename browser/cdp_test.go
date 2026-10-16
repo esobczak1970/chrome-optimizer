@@ -51,7 +51,7 @@ func TestDiscoverNoExistingPageDoesNotCreateOne(t *testing.T) {
 		count++
 		switch r.URL.Path {
 		case "/json/version":
-			fmt.Fprint(w, `{"webSocketDebuggerUrl":"ws://127.0.0.1:9222/devtools/browser/id"}`)
+			fmt.Fprintf(w, `{"webSocketDebuggerUrl":"ws://%s/devtools/browser/id"}`, r.Host)
 		case "/json/list":
 			fmt.Fprint(w, `[{"id":"worker","type":"service_worker"}]`)
 		default:
@@ -111,7 +111,7 @@ func TestDiscoveryDoesNotFollowRedirect(t *testing.T) {
 
 func TestDiscoverRequiresBrowserWebSocketPath(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprint(w, `{"webSocketDebuggerUrl":"ws://127.0.0.1:9222/devtools/page/other"}`)
+		fmt.Fprintf(w, `{"webSocketDebuggerUrl":"ws://%s/devtools/page/other"}`, r.Host)
 	}))
 	defer server.Close()
 	client, err := NewClient(server.URL, time.Second)
