@@ -115,7 +115,7 @@ func (c *Client) Discover(ctx context.Context) ([]Tab, error) {
 	defer cancel()
 	var version versionResponse
 	if err := c.jsonGET(ctx, "/json/version", &version); err != nil {
-		return nil, fmt.Errorf("connect to Chrome (start a separate debug profile on port 9222): %w", err)
+		return nil, fmt.Errorf("Chrome CDP endpoint %s is unavailable; on macOS run `make run-debug` to launch an isolated debugging profile (not your normal Chrome tabs): %w", c.endpoint.String(), err)
 	}
 	ws, err := url.Parse(version.WebSocketDebuggerURL)
 	if err != nil || ws.Scheme != "ws" || !loopbackHost(ws.Hostname()) ||
