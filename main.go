@@ -9,7 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	
+
 	"github.com/esobczak1970/chrome-optimizer/browser"
 	"github.com/esobczak1970/chrome-optimizer/config"
 	"github.com/esobczak1970/chrome-optimizer/ui"
