@@ -87,3 +87,39 @@ func TestDiscoverRejectsRemoteWebsocket(t *testing.T) {
 		t.Fatalf("expected refusal of remote WebSocket, got %v", err)
 	}
 }
+
+func TestDiscoveryDoesNotFollowRedirect(t *testing.T) {
+	redirectTarget := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Error("unexpected request to redirected server")
+	}))
+	defer redirectTarget.Close()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, redirectTarget.URL, http.StatusFound)
+	}))
+	defer server.Close()
+
+	client, err := NewClient(server.URL, time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.Discover(context.Background()); err == nil ||
+		!strings.Contains(err.Error(), "HTTP 302") {
+		t.Fatalf("expected redirect refusal, got %v", err)
+	}
+}
+
+func TestDiscoverRequiresBrowserWebSocketPath(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"webSocketDebuggerUrl":"ws://127.0.0.1:9222/devtools/page/other"}`)
+	}))
+	defer server.Close()
+	client, err := NewClient(server.URL, time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.Discover(context.Background()); err == nil ||
+		!strings.Contains(err.Error(), "WebSocket") {
+		t.Fatalf("expected non-browser WS path refusal, got %v", err)
+	}
+}
