@@ -56,7 +56,14 @@ func NewClient(rawEndpoint string, timeout time.Duration) (*Client, error) {
 	if timeout <= 0 {
 		return nil, errors.New("CDP timeout must be positive")
 	}
-	return &Client{endpoint: endpoint, http: &http.Client{Timeout: timeout}, timeout: timeout}, nil
+	return &Client{endpoint: endpoint, http: &http.Client{
+		Timeout: timeout,
+		// Never follow a redirect from the loopback debugger to another
+		// host, which could leak CDP discovery data off-machine.
+		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}, timeout: timeout}, nil
 }
 
 func loopbackHost(host string) bool {
@@ -112,7 +119,8 @@ func (c *Client) Discover(ctx context.Context) ([]Tab, error) {
 	}
 	ws, err := url.Parse(version.WebSocketDebuggerURL)
 	if err != nil || ws.Scheme != "ws" || !loopbackHost(ws.Hostname()) ||
-		ws.User != nil || ws.Port() == "" || ws.Port() != c.endpoint.Port() {
+		ws.User != nil || ws.Port() == "" || ws.Port() != c.endpoint.Port() ||
+		!strings.HasPrefix(ws.Path, "/devtools/browser/") || ws.RawQuery != "" || ws.Fragment != "" {
 		return nil, errors.New("Chrome returned an invalid or non-loopback browser WebSocket debugger URL")
 	}
 	var discovered []pageResponse
