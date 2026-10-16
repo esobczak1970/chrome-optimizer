@@ -15,7 +15,7 @@ func TestDomain(t *testing.T) {
 		"https://Example.COM:443/path?a=b": "example.com",
 		"https://[::1]:9222/x":         "::1",
 		"about:blank":                 "about:",
-		"chrome://settings/privacy":   "settings",
+		"chrome://settings/privacy":   "chrome:",
 		"file:///Users/test/doc.html":  "file:",
 		"":                            "-",
 		"relative/path":               "(relative)",
