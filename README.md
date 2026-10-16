@@ -4,6 +4,45 @@ Chrome Optimizer is a macOS/Apple Silicon Go application for inspecting Chrome t
 
 The canonical development roadmap is [Issues #1–#5](https://github.com/esobczak1970/chrome-optimizer/issues). A future native desktop UI will use **Fyne**, consistent with [Schema Artisan](https://github.com/esobczak1970/schemaartisan); the CLI will remain fully independent of Fyne.
 
+## Quick start on macOS
+
+The normal `make run` command **only attaches** to an existing CDP endpoint.
+If Chrome was started normally, port 9222 is usually closed and `make run`
+returns `connect: connection refused`. This is an expected setup error, **not**
+a Go compilation error.
+
+Use the one-command development workflow instead:
+
+```bash
+git pull origin main
+make run-debug
+```
+
+`make run-debug` safely starts or reuses an **isolated** Chrome debugging
+profile, verifies that CDP is listening at `127.0.0.1:9222`, and then runs
+the CLI. It does **not** restart, reconfigure, or expose your normal Chrome
+profile. Open some pages in the new Chrome window to see them in the listing.
+**Tabs already open in your usual Chrome profile will not appear.**
+
+Alternatively, start the isolated profile separately and connect later:
+
+```bash
+make chrome-start
+curl --noproxy '*' -fsS http://127.0.0.1:9222/json/version
+make run
+```
+
+Override the debug port or profile when necessary:
+
+```bash
+make run-debug CHROME_DEBUG_PORT=9333
+make chrome-start CHROME_DEBUG_PROFILE="$HOME/Library/Application Support/ChromeOptimizerDebug2"
+```
+
+Use `make test-shell` for mock-based verification of the startup safeguards.
+A Chrome process listening on the selected port must identify itself as a CDP
+endpoint; otherwise the launcher refuses to start a competing process.
+
 ## Requirements
 
 - macOS Apple Silicon, Go **1.27.2**
@@ -28,7 +67,8 @@ make help
 make doctor
 make deps
 make check
-make run
+make run-debug  # start/reuse isolated Chrome debugging profile
+make run        # attach only if Chrome CDP is already listening
 # Or:
 go run . --config=config.yaml --sort=domain
 ```

@@ -2,6 +2,7 @@ package browser
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -121,5 +122,30 @@ func TestDiscoverRequiresBrowserWebSocketPath(t *testing.T) {
 	if _, err := client.Discover(context.Background()); err == nil ||
 		!strings.Contains(err.Error(), "WebSocket") {
 		t.Fatalf("expected non-browser WS path refusal, got %v", err)
+	}
+}
+
+type transportFunc func(*http.Request) (*http.Response, error)
+
+func (fn transportFunc) RoundTrip(r *http.Request) (*http.Response, error) {
+	return fn(r)
+}
+
+func TestUnavailableCDPDisplaysLaunchInstructions(t *testing.T) {
+	client, err := NewClient("http://127.0.0.1:9222", time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client.http.Transport = transportFunc(func(*http.Request) (*http.Response, error) {
+		return nil, errors.New("connection refused")
+	})
+	_, err = client.Discover(context.Background())
+	if err == nil {
+		t.Fatal("expected connection failure")
+	}
+	for _, want := range []string{"make run-debug", "127.0.0.1:9222", "normal Chrome"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("missing actionable error substring %q in %v", want, err)
+		}
 	}
 }
