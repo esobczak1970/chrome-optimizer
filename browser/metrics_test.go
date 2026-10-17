@@ -11,7 +11,7 @@ import (
 	"github.com/chromedp/cdproto/performance"
 )
 
-func uintPtr(v uint64) *uint64 { return &v }
+func uintPtr(v uint64) *uint64    { return &v }
 func floatPtr(v float64) *float64 { return &v }
 
 func TestParseMetrics(t *testing.T) {
