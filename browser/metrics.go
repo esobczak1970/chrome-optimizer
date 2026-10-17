@@ -1,0 +1,206 @@
+// Package browser implements read-only Chrome DevTools Protocol diagnostics.
+package browser
+
+import (
+	"context"
+	"fmt"
+	"math"
+	"sync"
+	"time"
+
+	"github.com/chromedp/cdproto/cdp"
+	"github.com/chromedp/cdproto/performance"
+	"github.com/chromedp/cdproto/target"
+	"github.com/chromedp/chromedp"
+)
+
+// TabInfo deliberately distinguishes JavaScript heap bytes from a renderer's
+// physical RSS and TaskDuration's cumulative seconds from instantaneous CPU%.
+// CDP has no historical "last used" timestamp. ObservedTaskActivity is a
+// monitoring-derived task counter change, NOT proof of user interaction.
+type TabInfo struct {
+	Tab
+	JSHeapUsedBytes        *uint64
+	TaskDurationSeconds    *float64
+	ObservedTaskActivityAt *time.Time
+	SampledAt              time.Time
+	MetricsError           string
+}
+
+// Collect attaches to an existing browser and samples its existing page
+// targets. The shared parent holds one WebSocket connection; child contexts
+// must use WithDetachOnCancel to avoid closing user-owned tabs on shutdown.
+func (c *Client) Collect(ctx context.Context) ([]TabInfo, error) {
+	var result []TabInfo
+	err := c.withTargets(ctx, func(parent context.Context, tabs []Tab) error {
+		result = collectConcurrent(parent, tabs, func(sampleCtx context.Context, tab Tab) TabInfo {
+			return sampleTarget(sampleCtx, parent, tab)
+		})
+		return nil
+	})
+	return result, err
+}
+
+const maxConcurrentSamples = 4
+
+// collectConcurrent keeps target identity/order stable even if a tab vanishes
+// between Target.getTargets and Performance.getMetrics. Errors stay per-tab,
+// so one inaccessible tab does not hide healthy metrics for other tabs.
+// A private sampler is injected only at this boundary for deterministic tests.
+func collectConcurrent(ctx context.Context, tabs []Tab, sample func(context.Context, Tab) TabInfo) []TabInfo {
+	out := make([]TabInfo, len(tabs))
+	for i, tab := range tabs {
+		out[i] = TabInfo{Tab: tab, MetricsError: "collection canceled"}
+	}
+	if len(tabs) == 0 {
+		return out
+	}
+
+	workers := len(tabs)
+	if workers > maxConcurrentSamples {
+		workers = maxConcurrentSamples
+	}
+	jobs := make(chan int)
+	var wg sync.WaitGroup
+	for range workers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := range jobs {
+				if ctx.Err() != nil {
+					continue
+				}
+				info := sample(ctx, tabs[i])
+				// The caller's target identity is authoritative, even if
+				// an asynchronously closing tab changes its metadata.
+				info.Tab = tabs[i]
+				out[i] = info
+			}
+		}()
+	}
+send:
+	for i := range tabs {
+		select {
+		case <-ctx.Done():
+			break send
+		case jobs <- i:
+		}
+	}
+	close(jobs)
+	wg.Wait()
+	return out
+}
+
+func sampleTarget(ctx, parent context.Context, tab Tab) TabInfo {
+	result := TabInfo{Tab: tab, SampledAt: time.Now()}
+	// The parent has an initialized Browser transport. A new child attaches
+	// to the existing page, never creates a new tab, and DETACHES ON CANCEL.
+	tabCtx, cancel := chromedp.NewContext(parent,
+		chromedp.WithTargetID(target.ID(tab.TargetID)),
+		chromedp.WithDetachOnCancel(),
+	)
+	defer cancel()
+
+	err := chromedp.Do(tabCtx, chromedp.Func(func(commandCtx context.Context, session *chromedp.Target) error {
+		if _, err := cdp.Call(commandCtx, session, performance.Enable, performance.EnableParams{}); err != nil {
+			return fmt.Errorf("Performance.enable: %w", err)
+		}
+		defer func() {
+			// Disable metric collection before detaching the session. If
+			// the target closed or the context expired, detaching still
+			// cleans up the subscription.
+			_, _ = cdp.Call(commandCtx, session, performance.Disable, cdp.Empty{})
+		}()
+		metrics, err := cdp.Call(commandCtx, session, performance.GetMetrics, cdp.Empty{})
+		if err != nil {
+			return fmt.Errorf("Performance.getMetrics: %w", err)
+		}
+		result.JSHeapUsedBytes, result.TaskDurationSeconds = parseMetrics(metrics.Metrics)
+		result.SampledAt = time.Now()
+		return nil
+	}))
+	if err != nil {
+		result.MetricsError = err.Error()
+	}
+	return result
+}
+
+// parseMetrics extracts two explicitly named measurements. A missing metric
+// is nil rather than zero. Reject NaN, Inf, negative counters and overflow;
+// bogus values should never influence sorting or a future throttle decision.
+func parseMetrics(metrics []*performance.Metric) (*uint64, *float64) {
+	var heap *uint64
+	var task *float64
+	for _, m := range metrics {
+		if m == nil || math.IsNaN(m.Value) || math.IsInf(m.Value, 0) || m.Value < 0 {
+			continue
+		}
+		switch m.Name {
+		case "JSHeapUsedSize":
+			if m.Value >= math.Exp2(64) {
+				continue
+			}
+			value := uint64(m.Value)
+			heap = &value
+		case "TaskDuration":
+			value := m.Value
+			task = &value
+		}
+	}
+	return heap, task
+}
+
+// TaskActivityTracker remembers the last observed positive TaskDuration delta.
+// No browser history, URL, or title is persisted. It is suitable for a watch
+// session; the initial sample alone cannot establish a "last used" timestamp.
+type TaskActivityTracker struct {
+	previous map[string]float64
+	last     map[string]time.Time
+}
+
+func NewTaskActivityTracker() *TaskActivityTracker {
+	return &TaskActivityTracker{
+		previous: make(map[string]float64),
+		last:     make(map[string]time.Time),
+	}
+}
+
+// Observe compares samples at a known wall clock time. A reset or a vanished
+// target clears history rather than misrepresenting an old measurement.
+// Only task execution activity is inferred: background tasks may also qualify.
+func (a *TaskActivityTracker) Observe(infos []TabInfo, now time.Time) {
+	seen := make(map[string]bool, len(infos))
+	for i := range infos {
+		info := &infos[i]
+		id := info.TargetID
+		seen[id] = true
+		if info.TaskDurationSeconds == nil {
+			delete(a.previous, id)
+		} else {
+			current := *info.TaskDurationSeconds
+			if prior, ok := a.previous[id]; ok {
+				switch {
+				case current > prior:
+					a.last[id] = now
+				case current < prior:
+					delete(a.last, id)
+				}
+			}
+			a.previous[id] = current
+		}
+		if t, ok := a.last[id]; ok {
+			copy := t
+			info.ObservedTaskActivityAt = &copy
+		}
+	}
+	for id := range a.previous {
+		if !seen[id] {
+			delete(a.previous, id)
+		}
+	}
+	for id := range a.last {
+		if !seen[id] {
+			delete(a.last, id)
+		}
+	}
+}

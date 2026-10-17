@@ -2,3 +2,6 @@
 cdp_endpoint: http://127.0.0.1:9222
 timeout: 15s
 default_sort: domain
+
+# Watch mode refresh; task activity is observed only after the first sample.
+poll_interval: 5s

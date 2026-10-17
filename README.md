@@ -1,6 +1,6 @@
 # Chrome Optimizer
 
-Chrome Optimizer is a macOS/Apple Silicon Go application for inspecting Chrome tabs via the Chrome DevTools Protocol (CDP). **Phase 1 implements read-only tab discovery.** CPU/heap metrics, activity tracking, tab freezing, process throttling, and the desktop GUI are not yet implemented.
+Chrome Optimizer is a macOS/Apple Silicon Go application for inspecting Chrome tabs via the Chrome DevTools Protocol (CDP). **Phase 1 discovers tabs; Phases 2–3 add per-tab CDP metrics, sorting, and a basic live terminal display.** Tab freezing, OS throttling, and the desktop GUI are not yet implemented.
 
 The canonical development roadmap is [Issues #1–#5](https://github.com/esobczak1970/chrome-optimizer/issues). A future native desktop UI will use **Fyne**, consistent with [Schema Artisan](https://github.com/esobczak1970/schemaartisan); the CLI will remain fully independent of Fyne.
 
@@ -75,9 +75,55 @@ go run . --config=config.yaml --sort=domain
 
 Config values live in `config.yaml` and use strict YAML (unknown keys and multiple YAML documents are rejected). Overrides: `--config`, `--endpoint`, `--sort=domain|title|id`. All HTTP discovery requests are local read-only GETs. CDP `Target.getTargets` is issued after attaching to an **existing** page; when no page exists, the application returns an empty list rather than opening a new tab.
 
+## Tab metrics, sorting, and watch mode
+
+The default `make run` collects `Performance.getMetrics` from currently
+open page targets, using at most four simultaneous target sessions and a
+shared Chrome browser connection. A tab that disappears or refuses metrics
+appears with `-` readings and its error status, not invented zeros. No
+tab is navigated, frozen, or closed: all attachments use
+`chromedp.WithDetachOnCancel()`.
+
+```bash
+make run
+make run ARGS="--sort=memory --desc"
+make run ARGS="--sort=cpu --desc"
+make run ARGS="--sort=domain"
+make run ARGS="--watch --sort=activity --desc"
+make run ARGS="--watch --interval=10s --sort=memory --desc"
+```
+
+Sort keys: `domain`, `title`, `id`, `memory` (JavaScript heap),
+`cpu` (cumulative `TaskDuration`), and `activity` (last **observed
+change** in task duration). Use `--desc` for descending; missing values
+always sort last. The YAML configuration has `poll_interval: 5s` by default,
+with permitted values from 1s to 1m.
+
+**Readings mean precisely:**
+
+- **JS HEAP MiB:** `JSHeapUsedSize` converted from bytes. This is not
+  Chrome's resident memory, compressed memory, GPU allocation, or overall
+  per-tab RAM.
+- **TASK TIME s:** `TaskDuration`, a cumulative execution duration supplied
+  by CDP. It is not a CPU usage percentage.
+- **LAST TASK ACTIVITY:** A timestamp **first available after at least two
+  samples within one running `--watch` invocation** when TaskDuration
+  increases. Background scripts can increment it too. This is **not**
+  actual last user access, browser focus history, or a historical last-used
+  timestamp. `-` means no observed evidence yet.
+
+The implementation does not persist URLs, titles, metrics, or browsing history
+to disk. Closing or restarting the CLI resets its in-memory observations.
+
+**Live testing:** On a real macOS Chrome debugging session, open at least
+two ordinary web pages, run the metrics/sorting commands above, verify that
+the Target IDs persist across consecutive invocations, and confirm that
+no tab closes when Chrome Optimizer exits. Check `make check` and
+`make test-race` locally before treating the phase as validated.
+
 ## Metric and safety limitations
 
-CDP `TargetInfo` does **not** provide last-accessed time, so Phase 1 does not claim it does. Later phases will record activity observed after monitoring begins. `JSHeapUsedSize` will be reported as **JavaScript heap**, not process resident memory; `TaskDuration` is cumulative task time, not a CPU percent. A tab may share a Chrome renderer process with other tabs, so operating-system signals must never be sent without exclusive renderer proof and an independent recovery mechanism.
+CDP `TargetInfo` does **not** provide last-accessed time, so the program does not claim it does. Watch mode records observed task execution (not necessarily user interaction). `JSHeapUsedSize` will be reported as **JavaScript heap**, not process resident memory; `TaskDuration` is cumulative task time, not a CPU percent. A tab may share a Chrome renderer process with other tabs, so operating-system signals must never be sent without exclusive renderer proof and an independent recovery mechanism.
 
 The CLI does not send `SIGSTOP` or `SIGCONT` and does not freeze, navigate, discard, or close tabs.
 
