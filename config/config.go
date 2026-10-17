@@ -17,17 +17,17 @@ const MaxTimeout = 60 * time.Second
 // Config represents the public YAML configuration. Keep transport details out
 // of the view layer. A duration is serialized as a YAML string such as "15s".
 type Config struct {
-	CDPEndpoint string `yaml:"cdp_endpoint"`
-	Timeout     string `yaml:"timeout"`
-	DefaultSort string `yaml:"default_sort"`
+	CDPEndpoint  string `yaml:"cdp_endpoint"`
+	Timeout      string `yaml:"timeout"`
+	DefaultSort  string `yaml:"default_sort"`
 	PollInterval string `yaml:"poll_interval"`
 }
 
 func Default() Config {
 	return Config{
-		CDPEndpoint: "http://127.0.0.1:9222",
-		Timeout:     "15s",
-		DefaultSort: "domain",
+		CDPEndpoint:  "http://127.0.0.1:9222",
+		Timeout:      "15s",
+		DefaultSort:  "domain",
 		PollInterval: "5s",
 	}
 }
