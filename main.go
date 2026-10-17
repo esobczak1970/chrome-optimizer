@@ -129,13 +129,19 @@ func run(ctx context.Context, args []string, out, errOut io.Writer) error {
 		return err
 	}
 	tracker := browser.NewTaskActivityTracker()
+	noMatchesReported := false
 	renderSample := func(tabs []browser.TabInfo) error {
 		tracker.Observe(tabs, time.Now())
 		tabs = ui.FilterInfos(tabs, *filter)
 		if strings.TrimSpace(*filter) != "" && len(tabs) == 0 {
+			if *watch && noMatchesReported {
+				return nil
+			}
+			noMatchesReported = true
 			_, err := fmt.Fprintln(out, "No page targets match the filter.")
 			return err
 		}
+		noMatchesReported = false
 		if *watch {
 			if _, err := fmt.Fprintf(out, "\n%s | %d matching tabs | JS heap is not total RAM; task time is not CPU%%\n",
 				time.Now().Local().Format(time.RFC3339), len(tabs)); err != nil {
