@@ -46,7 +46,24 @@ func run(ctx context.Context, args []string, out, errOut io.Writer) error {
 	if flags.NArg() != 0 {
 		return fmt.Errorf("unexpected arguments: %v", flags.Args())
 	}
-	if *freezeID != "" && *resumeID != "" {
+	// Visiting flags distinguishes an omitted action from --freeze= or
+	// --resume= with a missing ID; never silently turn the latter into scan.
+	var freezeRequested, resumeRequested bool
+	flags.Visit(func(f *flag.Flag) {
+		switch f.Name {
+		case "freeze":
+			freezeRequested = true
+		case "resume":
+			resumeRequested = true
+		}
+	})
+	if freezeRequested && *freezeID == "" {
+		return errors.New("--freeze requires a complete TargetID")
+	}
+	if resumeRequested && *resumeID == "" {
+		return errors.New("--resume requires a complete TargetID")
+	}
+	if freezeRequested && resumeRequested {
 		return errors.New("--freeze and --resume are mutually exclusive")
 	}
 	if *freezeID != "" && !*confirmFreeze {
@@ -55,7 +72,7 @@ func run(ctx context.Context, args []string, out, errOut io.Writer) error {
 	if *confirmFreeze && *freezeID == "" {
 		return errors.New("--confirm-freeze requires --freeze=EXACT_TARGET_ID")
 	}
-	if *watch && (*freezeID != "" || *resumeID != "") {
+	if *watch && (freezeRequested || resumeRequested) {
 		return errors.New("--watch is read-only; lifecycle actions must run as separate one-shot commands")
 	}
 	cfg, err := config.Load(*configFile)
@@ -102,8 +119,10 @@ func run(ctx context.Context, args []string, out, errOut io.Writer) error {
 		if action == browser.Resume {
 			state = "active"
 		}
-		_, err = fmt.Fprintf(out, "Chrome acknowledged %s lifecycle request for TargetID %s (%s). This does not prove memory was released or that the state persisted.\n",
-			state, selected.TargetID, selected.Title)
+		// Titles are controlled by web pages, so never echo them raw in an
+		// action result where control characters could spoof terminal output.
+		_, err = fmt.Fprintf(out, "Chrome acknowledged %s lifecycle request for TargetID %s. This does not prove memory was released or that the state persisted.\n",
+			state, selected.TargetID)
 		return err
 	}
 	tracker := browser.NewTaskActivityTracker()
