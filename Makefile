@@ -21,7 +21,9 @@ help:
 	  '  make test-race     Run race tests' \
 	  '  make build         Build CLI' \
 	  '  make check         Format, vet, test, and build' \
-	  '  make run           Connect to an already-debuggable Chrome' \
+	  '  make run           Sample an already-debuggable Chrome (read-only)' \
+	  '  make run ARGS="--freeze=ID --confirm-freeze"  Freeze a hidden page explicitly' \
+	  '  make run ARGS="--resume=ID"                 Resume a selected page explicitly' \
 	  '  make chrome-start  Start a separate Chrome debugging profile (macOS)' \
 	  '  make run-debug     Start/reuse the separate Chrome profile and discover its tabs' \
 	  '  make test-shell    Test Chrome launch safeguards without real Chrome'

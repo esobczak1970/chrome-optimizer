@@ -124,6 +124,14 @@ func (c *Client) Discover(ctx context.Context) ([]Tab, error) {
 // children. Every context attaches to a user-owned tab in detach-only mode.
 // This prevents unnecessary WebSocket connections and accidental tab closure.
 func (c *Client) withTargets(ctx context.Context, visit func(context.Context, []Tab) error) error {
+	return c.withTargetsAvoid(ctx, "", visit)
+}
+
+// withTargetsAvoid keeps lifecycle target handling off the bootstrap page.
+// Opening or resuming a frozen target through the chromedp bootstrap can stall
+// while it initializes Runtime. Require a different existing page instead;
+// Chrome Optimizer never creates a recovery tab.
+func (c *Client) withTargetsAvoid(ctx context.Context, avoidID string, visit func(context.Context, []Tab) error) error {
 	ctx, cancel := context.WithTimeout(ctx, c.timeout)
 	defer cancel()
 	var version versionResponse
@@ -140,14 +148,11 @@ func (c *Client) withTargets(ctx context.Context, visit func(context.Context, []
 	if err := c.jsonGET(ctx, "/json/list", &discovered); err != nil {
 		return err
 	}
-	bootstrapID := ""
-	for _, page := range discovered {
-		if page.Type == "page" && page.ID != "" {
-			bootstrapID = page.ID
-			break
-		}
-	}
+	bootstrapID := pickBootstrapTarget(discovered, avoidID)
 	if bootstrapID == "" {
+		if avoidID != "" {
+			return errors.New("lifecycle action needs another open page as a CDP helper; open an additional tab in the debugging Chrome window and retry")
+		}
 		// No page exists to attach without creating a new tab.
 		return visit(ctx, []Tab{})
 	}
@@ -193,6 +198,18 @@ func (c *Client) withTargets(ctx context.Context, visit func(context.Context, []
 	}
 	sort.Slice(tabs, func(i, j int) bool { return tabs[i].TargetID < tabs[j].TargetID })
 	return visit(tabCtx, tabs)
+}
+
+// pickBootstrapTarget only attaches to a pre-existing page. Lifecycle
+// operations must never bootstrap through their selected target, which could
+// already be frozen and unable to run chromedp's initialization commands.
+func pickBootstrapTarget(discovered []pageResponse, avoidID string) string {
+	for _, candidate := range discovered {
+		if candidate.Type == "page" && candidate.ID != "" && candidate.ID != avoidID {
+			return candidate.ID
+		}
+	}
+	return ""
 }
 
 // Domain provides the parsed hostname, not a guessed registrable domain.
