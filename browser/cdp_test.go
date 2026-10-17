@@ -14,13 +14,13 @@ import (
 func TestDomain(t *testing.T) {
 	tests := map[string]string{
 		"https://Example.COM:443/path?a=b": "example.com",
-		"https://[::1]:9222/x":         "::1",
-		"about:blank":                 "about:",
-		"chrome://settings/privacy":   "chrome:",
-		"file:///Users/test/doc.html":  "file:",
-		"":                            "-",
-		"relative/path":               "(relative)",
-		"%":                           "(invalid)",
+		"https://[::1]:9222/x":             "::1",
+		"about:blank":                      "about:",
+		"chrome://settings/privacy":        "chrome:",
+		"file:///Users/test/doc.html":      "file:",
+		"":                                 "-",
+		"relative/path":                    "(relative)",
+		"%":                                "(invalid)",
 	}
 	for raw, want := range tests {
 		if got := Domain(raw); got != want {
