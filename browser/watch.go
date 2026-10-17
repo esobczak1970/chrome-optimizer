@@ -38,16 +38,23 @@ func newWatchedTarget(parent context.Context, targetID string, epoch uint64) *wa
 // deltas comparable within an epoch, unlike one-shot Collect's fresh session.
 func (s *watchedTarget) sample(tab Tab, timeout time.Duration) TabInfo {
 	result := TabInfo{Tab: tab, SampledAt: time.Now(), MetricSessionEpoch: s.epoch}
-	cmdCtx, done := context.WithTimeout(s.ctx, timeout)
-	defer done()
-	err := chromedp.Do(cmdCtx, chromedp.Func(func(runCtx context.Context, current *chromedp.Target) error {
+	// chromedp initializes its target reader on the Do context. A timed
+	// child of s.ctx would end the target reader on the first sample and
+	// recreate the exact reset bug this watch mode is intended to fix.
+	// Instead use the persistent context and cancel that session only if
+	// this sample exceeds its timeout; next refresh can reattach cleanly.
+	watchdog := time.AfterFunc(timeout, s.cancel)
+	defer watchdog.Stop()
+	err := chromedp.Do(s.ctx, chromedp.Func(func(runCtx context.Context, current *chromedp.Target) error {
+		commandCtx, done := context.WithTimeout(runCtx, timeout)
+		defer done()
 		if !s.enabled {
-			if _, err := cdp.Call(runCtx, current, performance.Enable, performance.EnableParams{}); err != nil {
+			if _, err := cdp.Call(commandCtx, current, performance.Enable, performance.EnableParams{}); err != nil {
 				return fmt.Errorf("Performance.enable: %w", err)
 			}
 			s.enabled = true
 		}
-		values, err := cdp.Call(runCtx, current, performance.GetMetrics, cdp.Empty{})
+		values, err := cdp.Call(commandCtx, current, performance.GetMetrics, cdp.Empty{})
 		if err != nil {
 			return fmt.Errorf("Performance.getMetrics: %w", err)
 		}
