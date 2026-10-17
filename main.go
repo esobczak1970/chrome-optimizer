@@ -37,11 +37,26 @@ func run(ctx context.Context, args []string, out, errOut io.Writer) error {
 	desc := flags.Bool("desc", false, "sort descending; unknown metrics always last")
 	watch := flags.Bool("watch", false, "resample periodically until interrupted")
 	intervalFlag := flags.Duration("interval", 0, "watch refresh interval (1s to 1m)")
+	freezeID := flags.String("freeze", "", "request freezing an exact background HTTP(S) tab TargetID")
+	resumeID := flags.String("resume", "", "request resuming an exact tab TargetID")
+	confirmFreeze := flags.Bool("confirm-freeze", false, "explicitly consent to modifying the selected tab's lifecycle")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
 	if flags.NArg() != 0 {
 		return fmt.Errorf("unexpected arguments: %v", flags.Args())
+	}
+	if *freezeID != "" && *resumeID != "" {
+		return errors.New("--freeze and --resume are mutually exclusive")
+	}
+	if *freezeID != "" && !*confirmFreeze {
+		return errors.New("freezing changes a tab: specify --confirm-freeze together with --freeze=EXACT_TARGET_ID")
+	}
+	if *confirmFreeze && *freezeID == "" {
+		return errors.New("--confirm-freeze requires --freeze=EXACT_TARGET_ID")
+	}
+	if *watch && (*freezeID != "" || *resumeID != "") {
+		return errors.New("--watch is read-only; lifecycle actions must run as separate one-shot commands")
 	}
 	cfg, err := config.Load(*configFile)
 	if err != nil {
@@ -72,6 +87,23 @@ func run(ctx context.Context, args []string, out, errOut io.Writer) error {
 	}
 	client, err := browser.NewClient(cfg.CDPEndpoint, timeout)
 	if err != nil {
+		return err
+	}
+	if *freezeID != "" || *resumeID != "" {
+		action, targetID := browser.Freeze, *freezeID
+		if *resumeID != "" {
+			action, targetID = browser.Resume, *resumeID
+		}
+		selected, err := client.SetLifecycle(ctx, targetID, action)
+		if err != nil {
+			return err
+		}
+		state := "frozen"
+		if action == browser.Resume {
+			state = "active"
+		}
+		_, err = fmt.Fprintf(out, "Chrome acknowledged %s lifecycle request for TargetID %s (%s). This does not prove memory was released or that the state persisted.\n",
+			state, selected.TargetID, selected.Title)
 		return err
 	}
 	tracker := browser.NewTaskActivityTracker()
