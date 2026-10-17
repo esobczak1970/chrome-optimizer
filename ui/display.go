@@ -104,6 +104,9 @@ func renderMetrics(w io.Writer, input []browser.TabInfo, key string, desc, compa
 		}
 		if tab.TaskDurationSeconds != nil {
 			cpu = fmt.Sprintf("%.3f", *tab.TaskDurationSeconds)
+			if *tab.TaskDurationSeconds > 0 && *tab.TaskDurationSeconds < 0.01 {
+				cpu = fmt.Sprintf("%.6f", *tab.TaskDurationSeconds)
+			}
 		}
 		if tab.ObservedTaskActivityAt != nil {
 			activity = tab.ObservedTaskActivityAt.Local().Format("15:04:05")
