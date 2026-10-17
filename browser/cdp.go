@@ -134,6 +134,13 @@ func (c *Client) withTargets(ctx context.Context, visit func(context.Context, []
 func (c *Client) withTargetsAvoid(ctx context.Context, avoidID string, visit func(context.Context, []Tab) error) error {
 	ctx, cancel := context.WithTimeout(ctx, c.timeout)
 	defer cancel()
+	return c.withTargetSession(ctx, avoidID, visit)
+}
+
+// withTargetSession owns the browser connection for as long as the visitor
+// needs it. A one-shot scan sets its own timeout; watch sessions keep this
+// context alive and instead bound each CDP command independently.
+func (c *Client) withTargetSession(ctx context.Context, avoidID string, visit func(context.Context, []Tab) error) error {
 	var version versionResponse
 	if err := c.jsonGET(ctx, "/json/version", &version); err != nil {
 		return fmt.Errorf("Chrome CDP endpoint %s is unavailable; on macOS run `make run-debug` to launch an isolated debugging profile (not your normal Chrome tabs): %w", c.endpoint.String(), err)
@@ -170,6 +177,11 @@ func (c *Client) withTargetsAvoid(ctx context.Context, avoidID string, visit fun
 	)
 	defer cancelTab()
 	var infos []*target.Info
+	// A long-lived watch must bound initial attachment without giving the
+	// target session a short-lived context: chromedp runs its target reader
+	// on the Run context, so a timed child would kill the session later.
+	initTimer := time.AfterFunc(c.timeout, cancelTab)
+	defer initTimer.Stop()
 	if err := chromedp.Do(tabCtx, chromedp.Func(func(runCtx context.Context, _ *chromedp.Target) error {
 		// Target is a browser-scope domain. Calling it through the browser
 		// session avoids incorrectly treating this as page instrumentation.
@@ -183,7 +195,15 @@ func (c *Client) withTargetsAvoid(ctx context.Context, avoidID string, visit fun
 	})); err != nil {
 		return fmt.Errorf("Target.getTargets (bootstrap target %s): %w", bootstrapID, err)
 	}
+	// Initialization is complete. Stop the watchdog now so it cannot
+	// cancel the persistent browser connection during later refreshes.
+	initTimer.Stop()
+	return visit(tabCtx, tabsFromInfos(infos))
+}
 
+// tabsFromInfos is the canonical Target.getTargets translation used by
+// one-shot discovery and by watch-mode refreshes.
+func tabsFromInfos(infos []*target.Info) []Tab {
 	tabs := make([]Tab, 0, len(infos))
 	for _, info := range infos {
 		if info == nil || info.Type != "page" || info.TargetID == "" {
@@ -197,7 +217,24 @@ func (c *Client) withTargetsAvoid(ctx context.Context, avoidID string, visit fun
 		})
 	}
 	sort.Slice(tabs, func(i, j int) bool { return tabs[i].TargetID < tabs[j].TargetID })
-	return visit(tabCtx, tabs)
+	return tabs
+}
+
+// currentTargets queries the initialized browser-level CDP executor without
+// attaching to, navigating or creating any page. It works for existing tabs
+// while a long-lived watch session is active.
+func (c *Client) currentTargets(ctx context.Context) ([]Tab, error) {
+	commandCtx, cancel := context.WithTimeout(ctx, c.timeout)
+	defer cancel()
+	browserContext := chromedp.FromContext(ctx)
+	if browserContext == nil || browserContext.Browser == nil {
+		return nil, errors.New("Chrome browser session has not initialized")
+	}
+	response, err := cdp.Call(commandCtx, browserContext.Browser, target.GetTargets, target.GetTargetsParams{})
+	if err != nil {
+		return nil, fmt.Errorf("Target.getTargets watch refresh: %w", err)
+	}
+	return tabsFromInfos(response.TargetInfos), nil
 }
 
 // pickBootstrapTarget only attaches to a pre-existing page. Lifecycle

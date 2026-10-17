@@ -23,8 +23,11 @@ type TabInfo struct {
 	JSHeapUsedBytes        *uint64
 	TaskDurationSeconds    *float64
 	ObservedTaskActivityAt *time.Time
-	SampledAt              time.Time
-	MetricsError           string
+	// MetricSessionEpoch is nonzero for a persistent watch attachment.
+	// A changed epoch invalidates TaskDuration comparisons after reattach.
+	MetricSessionEpoch uint64
+	SampledAt          time.Time
+	MetricsError       string
 }
 
 // Collect attaches to an existing browser and samples its existing page
@@ -153,14 +156,19 @@ func parseMetrics(metrics []*performance.Metric) (*uint64, *float64) {
 // TaskActivityTracker remembers the last observed positive TaskDuration delta.
 // No browser history, URL, or title is persisted. It is suitable for a watch
 // session; the initial sample alone cannot establish a "last used" timestamp.
+type taskBaseline struct {
+	duration float64
+	epoch    uint64
+}
+
 type TaskActivityTracker struct {
-	previous map[string]float64
+	previous map[string]taskBaseline
 	last     map[string]time.Time
 }
 
 func NewTaskActivityTracker() *TaskActivityTracker {
 	return &TaskActivityTracker{
-		previous: make(map[string]float64),
+		previous: make(map[string]taskBaseline),
 		last:     make(map[string]time.Time),
 	}
 }
@@ -176,17 +184,22 @@ func (a *TaskActivityTracker) Observe(infos []TabInfo, now time.Time) {
 		seen[id] = true
 		if info.TaskDurationSeconds == nil {
 			delete(a.previous, id)
+			delete(a.last, id)
 		} else {
 			current := *info.TaskDurationSeconds
 			if prior, ok := a.previous[id]; ok {
 				switch {
-				case current > prior:
+				case prior.epoch != info.MetricSessionEpoch:
+					// Never compare unrelated Performance.enable sessions.
+					delete(a.last, id)
+				case current > prior.duration:
 					a.last[id] = now
-				case current < prior:
+				case current < prior.duration:
+					// A counter reset also invalidates the activity history.
 					delete(a.last, id)
 				}
 			}
-			a.previous[id] = current
+			a.previous[id] = taskBaseline{duration: current, epoch: info.MetricSessionEpoch}
 		}
 		if t, ok := a.last[id]; ok {
 			copy := t

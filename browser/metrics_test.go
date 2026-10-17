@@ -120,3 +120,55 @@ func TestMissingMetricsResetComparisonBaseline(t *testing.T) {
 		t.Fatal("a failed intermediate sample must not create invented activity")
 	}
 }
+
+func TestTaskActivityTrackerDoesNotCompareDifferentCDPSessions(t *testing.T) {
+	tracker := NewTaskActivityTracker()
+	now := time.Date(2026, 10, 16, 21, 55, 0, 0, time.UTC)
+	first := []TabInfo{{
+		Tab:                 Tab{TargetID: "news"},
+		MetricSessionEpoch:  10,
+		TaskDurationSeconds: floatPtr(0.001),
+	}}
+	tracker.Observe(first, now)
+	if first[0].ObservedTaskActivityAt != nil {
+		t.Fatal("a first reading cannot establish activity")
+	}
+	second := []TabInfo{{
+		Tab:                 Tab{TargetID: "news"},
+		MetricSessionEpoch:  10,
+		TaskDurationSeconds: floatPtr(0.125),
+	}}
+	tracker.Observe(second, now.Add(time.Second))
+	if second[0].ObservedTaskActivityAt == nil {
+		t.Fatal("task time increased within same epoch but activity was not observed")
+	}
+	// A new CDP session might begin at any counter value. Comparing it to
+	// the prior session is invalid even if its value happens to increase.
+	reconnected := []TabInfo{{
+		Tab:                 Tab{TargetID: "news"},
+		MetricSessionEpoch:  11,
+		TaskDurationSeconds: floatPtr(0.501),
+	}}
+	tracker.Observe(reconnected, now.Add(2*time.Second))
+	if reconnected[0].ObservedTaskActivityAt != nil {
+		t.Fatal("new session must reset both baseline and last activity")
+	}
+	stable := []TabInfo{{
+		Tab:                 Tab{TargetID: "news"},
+		MetricSessionEpoch:  11,
+		TaskDurationSeconds: floatPtr(0.501),
+	}}
+	tracker.Observe(stable, now.Add(3*time.Second))
+	if stable[0].ObservedTaskActivityAt != nil {
+		t.Fatal("unchanged task counter is not activity")
+	}
+	increased := []TabInfo{{
+		Tab:                 Tab{TargetID: "news"},
+		MetricSessionEpoch:  11,
+		TaskDurationSeconds: floatPtr(0.55),
+	}}
+	tracker.Observe(increased, now.Add(4*time.Second))
+	if increased[0].ObservedTaskActivityAt == nil {
+		t.Fatal("activity after valid second sample was not detected")
+	}
+}
