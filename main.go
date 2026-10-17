@@ -35,6 +35,8 @@ func run(ctx context.Context, args []string, out, errOut io.Writer) error {
 	endpoint := flags.String("endpoint", "", "override loopback CDP endpoint")
 	sortBy := flags.String("sort", "", "domain, title, id, memory, cpu or activity")
 	desc := flags.Bool("desc", false, "sort descending; unknown metrics always last")
+	filter := flags.String("filter", "", "case-insensitive substring search over target ID, domain, title and URL")
+	compact := flags.Bool("compact", false, "compact terminal view without full URLs")
 	watch := flags.Bool("watch", false, "resample periodically until interrupted")
 	intervalFlag := flags.Duration("interval", 0, "watch refresh interval (1s to 1m)")
 	freezeID := flags.String("freeze", "", "request freezing an exact background HTTP(S) tab TargetID")
@@ -132,11 +134,15 @@ func run(ctx context.Context, args []string, out, errOut io.Writer) error {
 			return err
 		}
 		tracker.Observe(tabs, time.Now())
+		tabs = ui.FilterInfos(tabs, *filter)
 		if *watch {
-			if _, err := fmt.Fprintf(out, "\n%s | %d page tabs | JS heap is not total RAM; task time is not CPU%%\n",
+			if _, err := fmt.Fprintf(out, "\n%s | %d matching tabs | JS heap is not total RAM; task time is not CPU%%\n",
 				time.Now().Local().Format(time.RFC3339), len(tabs)); err != nil {
 				return err
 			}
+		}
+		if *compact {
+			return ui.RenderMetricsCompact(out, tabs, cfg.DefaultSort, *desc)
 		}
 		return ui.RenderMetrics(out, tabs, cfg.DefaultSort, *desc)
 	}
