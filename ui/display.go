@@ -75,12 +75,26 @@ func Render(w io.Writer, input []browser.Tab, key string) error {
 // RenderMetrics clearly identifies the CDP quantities: JS heap bytes and
 // cumulative task time are not total process RAM or instantaneous CPU percent.
 func RenderMetrics(w io.Writer, input []browser.TabInfo, key string, desc bool) error {
+	return renderMetrics(w, input, key, desc, false)
+}
+
+// RenderMetricsCompact keeps terminal output within more typical window widths.
+// It omits potentially very long URL values but never changes any CDP data.
+func RenderMetricsCompact(w io.Writer, input []browser.TabInfo, key string, desc bool) error {
+	return renderMetrics(w, input, key, desc, true)
+}
+
+func renderMetrics(w io.Writer, input []browser.TabInfo, key string, desc, compact bool) error {
 	if len(input) == 0 {
 		_, err := fmt.Fprintln(w, "No existing Chrome page targets found.")
 		return err
 	}
 	tw := tabwriter.NewWriter(w, 0, 4, 2, ' ', 0)
-	if _, err := fmt.Fprintln(tw, "TARGET ID\tDOMAIN\tJS HEAP MiB\tTASK TIME s\tLAST TASK ACTIVITY\tTITLE\tURL\tSTATUS"); err != nil {
+	header := "TARGET ID\tDOMAIN\tJS HEAP MiB\tTASK TIME s\tLAST TASK ACTIVITY\tTITLE\tURL\tSTATUS"
+	if compact {
+		header = "ID\tDOMAIN\tJS HEAP MiB\tTASK s\tACTIVITY\tTITLE\tSTATUS"
+	}
+	if _, err := fmt.Fprintln(tw, header); err != nil {
 		return err
 	}
 	for _, tab := range SortInfos(input, key, desc) {
@@ -99,6 +113,15 @@ func RenderMetrics(w io.Writer, input []browser.TabInfo, key string, desc bool) 
 			status = shorten(clean(tab.MetricsError), 66)
 		} else if tab.JSHeapUsedBytes == nil || tab.TaskDurationSeconds == nil {
 			status = "partial / unsupported"
+		}
+		if compact {
+			if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+				shorten(clean(tab.TargetID), 10), shorten(clean(tab.Domain), 26),
+				memory, cpu, activity, shorten(clean(tab.Title), 38),
+				shorten(status, 40)); err != nil {
+				return err
+			}
+			continue
 		}
 		if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
 			clean(tab.TargetID), clean(tab.Domain), memory, cpu, activity,
