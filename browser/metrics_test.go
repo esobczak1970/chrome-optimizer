@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"math"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -66,10 +67,14 @@ func TestCollectConcurrentPreservesTargetIdentityAndOrder(t *testing.T) {
 func TestCollectConcurrentCanceledWithoutRunningSampler(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
+	var called atomic.Bool
 	out := collectConcurrent(ctx, []Tab{{TargetID: "a"}}, func(context.Context, Tab) TabInfo {
-		t.Fatal("canceled collection should not sample")
+		called.Store(true)
 		return TabInfo{}
 	})
+	if called.Load() {
+		t.Fatal("canceled collection invoked its sampler")
+	}
 	if len(out) != 1 || out[0].MetricsError != "collection canceled" {
 		t.Fatalf("expected canceled target with preserved identity, got %+v", out)
 	}
