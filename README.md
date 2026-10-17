@@ -1,6 +1,6 @@
 # Chrome Optimizer
 
-Chrome Optimizer is a macOS/Apple Silicon Go application for inspecting Chrome tabs via the Chrome DevTools Protocol (CDP). **Phase 1 discovers tabs, and the Phase 2 development branch adds per-tab CDP metrics and a basic live terminal display.** Tab freezing, OS throttling, and the desktop GUI are not yet implemented.
+Chrome Optimizer is a macOS/Apple Silicon Go application for inspecting Chrome tabs via the Chrome DevTools Protocol (CDP). **Phase 1 discovers tabs; Phases 2–3 add per-tab CDP metrics, sorting, and a basic live terminal display.** Tab freezing, OS throttling, and the desktop GUI are not yet implemented.
 
 The canonical development roadmap is [Issues #1–#5](https://github.com/esobczak1970/chrome-optimizer/issues). A future native desktop UI will use **Fyne**, consistent with [Schema Artisan](https://github.com/esobczak1970/schemaartisan); the CLI will remain fully independent of Fyne.
 
