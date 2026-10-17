@@ -20,6 +20,7 @@ type Config struct {
 	CDPEndpoint string `yaml:"cdp_endpoint"`
 	Timeout     string `yaml:"timeout"`
 	DefaultSort string `yaml:"default_sort"`
+	PollInterval string `yaml:"poll_interval"`
 }
 
 func Default() Config {
@@ -27,6 +28,7 @@ func Default() Config {
 		CDPEndpoint: "http://127.0.0.1:9222",
 		Timeout:     "15s",
 		DefaultSort: "domain",
+		PollInterval: "5s",
 	}
 }
 
@@ -58,9 +60,12 @@ func Load(path string) (Config, error) {
 	if _, err := cfg.Duration(); err != nil {
 		return Config{}, err
 	}
+	if _, err := cfg.PollDuration(); err != nil {
+		return Config{}, err
+	}
 	cfg.DefaultSort = strings.ToLower(strings.TrimSpace(cfg.DefaultSort))
-	if cfg.DefaultSort != "domain" && cfg.DefaultSort != "title" && cfg.DefaultSort != "id" {
-		return Config{}, fmt.Errorf("default_sort %q must be domain, title, or id in phase 1", cfg.DefaultSort)
+	if !ValidSort(cfg.DefaultSort) {
+		return Config{}, fmt.Errorf("unsupported default_sort %q: choose domain, title, id, memory, cpu, or activity", cfg.DefaultSort)
 	}
 	if strings.TrimSpace(cfg.CDPEndpoint) == "" {
 		return Config{}, errors.New("cdp_endpoint must not be empty")
@@ -72,6 +77,26 @@ func (c Config) Duration() (time.Duration, error) {
 	d, err := time.ParseDuration(strings.TrimSpace(c.Timeout))
 	if err != nil || d <= 0 || d > MaxTimeout {
 		return 0, fmt.Errorf("timeout %q must be a duration greater than 0 and at most %s", c.Timeout, MaxTimeout)
+	}
+	return d, nil
+}
+
+// ValidSort limits user-selectable comparison keys to recognized fields.
+func ValidSort(key string) bool {
+	switch key {
+	case "domain", "title", "id", "memory", "cpu", "activity":
+		return true
+	default:
+		return false
+	}
+}
+
+// PollDuration validates live refresh frequency independently of the CDP
+// operation timeout. Frequent polling can add considerable browser overhead.
+func (c Config) PollDuration() (time.Duration, error) {
+	d, err := time.ParseDuration(strings.TrimSpace(c.PollInterval))
+	if err != nil || d < time.Second || d > time.Minute {
+		return 0, fmt.Errorf("poll_interval %q must be between 1s and 1m", c.PollInterval)
 	}
 	return d, nil
 }
