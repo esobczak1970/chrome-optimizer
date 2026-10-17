@@ -3,6 +3,9 @@ package browser
 import (
 	"context"
 	"errors"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 )
@@ -131,5 +134,52 @@ func TestLifecycleActionValidationBeforeCDP(t *testing.T) {
 		if _, err := client.SetLifecycle(context.Background(), item.id, item.action); err == nil {
 			t.Fatalf("expected local rejection of %+v before CDP", item)
 		}
+	}
+}
+
+func TestPickBootstrapNeverUsesSelectedLifecycleTab(t *testing.T) {
+	pages := []pageResponse{
+		{ID: "target", Type: "page"},
+		{ID: "worker", Type: "service_worker"},
+		{ID: "helper", Type: "page"},
+	}
+	if got := pickBootstrapTarget(pages, "target"); got != "helper" {
+		t.Fatalf("selected target must not be used for Chrome bootstrap: %q", got)
+	}
+	if got := pickBootstrapTarget(pages[:2], "target"); got != "" {
+		t.Fatalf("missing helper must be rejected: %q", got)
+	}
+	if got := pickBootstrapTarget(pages, ""); got != "target" {
+		t.Fatalf("normal read-only discovery should work unchanged: %q", got)
+	}
+}
+
+func TestWithTargetsAvoidFailsClosedWithoutHelper(t *testing.T) {
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		switch r.URL.Path {
+		case "/json/version":
+			fmt.Fprintf(w, `{"webSocketDebuggerUrl":"ws://%s/devtools/browser/test"}`, r.Host)
+		case "/json/list":
+			fmt.Fprint(w, `[{"id":"target","type":"page"}]`)
+		default:
+			t.Fatalf("unexpected request for %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+	client, err := NewClient(server.URL, 3e9)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = client.withTargetsAvoid(context.Background(), "target", func(context.Context, []Tab) error {
+		t.Fatal("operation must stop without a separate helper page")
+		return nil
+	})
+	if err == nil || !strings.Contains(err.Error(), "another open page") {
+		t.Fatalf("expected actionable helper-tab error, got %v", err)
+	}
+	if requests != 2 {
+		t.Fatalf("expected HTTP discovery only, got %d requests", requests)
 	}
 }
