@@ -1,6 +1,6 @@
 # Chrome Optimizer
 
-Chrome Optimizer is a macOS/Apple Silicon Go application for inspecting Chrome tabs via the Chrome DevTools Protocol (CDP). **Phase 1 discovers tabs; Phases 2–3 add per-tab CDP metrics, sorting, and a basic live terminal display.** Tab freezing, OS throttling, and the desktop GUI are not yet implemented.
+Chrome Optimizer is a macOS/Apple Silicon Go application for inspecting Chrome tabs via the Chrome DevTools Protocol (CDP). **Phase 1 discovers tabs; Phases 2–3 add per-tab CDP metrics, sorting, and a basic live terminal display.** Explicit, experimental CDP freeze/resume is available behind safety checks; OS throttling and the desktop GUI are not implemented.
 
 The canonical development roadmap is [Issues #1–#5](https://github.com/esobczak1970/chrome-optimizer/issues). A future native desktop UI will use **Fyne**, consistent with [Schema Artisan](https://github.com/esobczak1970/schemaartisan); the CLI will remain fully independent of Fyne.
 
@@ -73,7 +73,7 @@ make run        # attach only if Chrome CDP is already listening
 go run . --config=config.yaml --sort=domain
 ```
 
-Config values live in `config.yaml` and use strict YAML (unknown keys and multiple YAML documents are rejected). Overrides: `--config`, `--endpoint`, `--sort=domain|title|id`. All HTTP discovery requests are local read-only GETs. CDP `Target.getTargets` is issued after attaching to an **existing** page; when no page exists, the application returns an empty list rather than opening a new tab.
+Config values live in `config.yaml` and use strict YAML (unknown keys and multiple YAML documents are rejected). Overrides: `--config`, `--endpoint`, `--sort=domain|title|id|memory|cpu|activity`. All HTTP discovery requests are local read-only GETs. CDP `Target.getTargets` is issued after attaching to an **existing** page; when no page exists, the application returns an empty list rather than opening a new tab.
 
 ## Tab metrics, sorting, and watch mode
 
@@ -121,11 +121,41 @@ the Target IDs persist across consecutive invocations, and confirm that
 no tab closes when Chrome Optimizer exits. Check `make check` and
 `make test-race` locally before treating the phase as validated.
 
+## Explicit background-tab freeze and resume (experimental)
+
+**Normal `make run` and `--watch` are read-only.** Freezing requires a
+complete TargetID **and** a second confirmation flag. Chrome Optimizer
+refuses to freeze the foreground page, internal Chrome pages or a page
+whose visibility cannot be verified. Keep at least one separate helper
+page open in the isolated debugging profile.
+
+```bash
+make run
+# Identify the full ID of an ordinary HTTP(S) page that is in the background:
+make run ARGS="--freeze=FULL_TARGET_ID --confirm-freeze"
+# Later request resumption by that exact ID:
+make run ARGS="--resume=FULL_TARGET_ID"
+```
+
+This uses CDP `Page.setWebLifecycleState` (experimental) on the selected
+page; **it is not a process suspension, memory release, or CPU throttle**.
+Acknowledgment of the protocol command does not establish that Chrome
+actually persisted the state. Foreground detection has a small race if
+a user switches tabs during the request, and pages with active media or
+unsaved state should not be frozen. A frozen tab may not respond to
+chromedp session initialization during resumption, so Chrome's own tab
+selection/reload or a debug-profile restart may be necessary. Do not
+use freeze on irreplaceable page state.
+
+Read the full [lifecycle safety and recovery guide](docs/CHROME_LIFECYCLE_SAFETY.md).
+Chrome process-level SIGSTOP/SIGCONT remains **intentionally unavailable**
+until exclusive renderer mapping and independent recovery are established.
+
 ## Metric and safety limitations
 
 CDP `TargetInfo` does **not** provide last-accessed time, so the program does not claim it does. Watch mode records observed task execution (not necessarily user interaction). `JSHeapUsedSize` will be reported as **JavaScript heap**, not process resident memory; `TaskDuration` is cumulative task time, not a CPU percent. A tab may share a Chrome renderer process with other tabs, so operating-system signals must never be sent without exclusive renderer proof and an independent recovery mechanism.
 
-The CLI does not send `SIGSTOP` or `SIGCONT` and does not freeze, navigate, discard, or close tabs.
+The CLI never sends `SIGSTOP` or `SIGCONT`, navigates, discards, or closes tabs. CDP freeze/resume is available only through the explicit commands documented above.
 
 ## Validation
 
