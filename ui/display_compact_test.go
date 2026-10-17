@@ -55,3 +55,18 @@ func TestRenderCompactMissingMetrics(t *testing.T) {
 		t.Fatalf("unknown values must remain distinguished: %q", output.String())
 	}
 }
+
+func TestRenderCompactShowsTinyNonzeroTaskDuration(t *testing.T) {
+	tiny := 0.000416
+	var output bytes.Buffer
+	tab := browser.TabInfo{
+		Tab: browser.Tab{TargetID: "test", Domain: "example.com"},
+		TaskDurationSeconds: &tiny,
+	}
+	if err := RenderMetricsCompact(&output, []browser.TabInfo{tab}, "cpu", true); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(output.String(), "0.000416") {
+		t.Fatalf("small but nonzero task time was rounded away: %q", output.String())
+	}
+}
