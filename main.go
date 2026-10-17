@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -135,6 +136,10 @@ func run(ctx context.Context, args []string, out, errOut io.Writer) error {
 		}
 		tracker.Observe(tabs, time.Now())
 		tabs = ui.FilterInfos(tabs, *filter)
+		if strings.TrimSpace(*filter) != "" && len(tabs) == 0 {
+			_, err := fmt.Fprintln(out, "No page targets match the filter.")
+			return err
+		}
 		if *watch {
 			if _, err := fmt.Fprintf(out, "\n%s | %d matching tabs | JS heap is not total RAM; task time is not CPU%%\n",
 				time.Now().Local().Format(time.RFC3339), len(tabs)); err != nil {
