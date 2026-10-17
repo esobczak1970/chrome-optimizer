@@ -110,22 +110,35 @@ func (c *Client) jsonGET(ctx context.Context, path string, result any) error {
 // an unbound chromedp page context would otherwise open a *new* Chrome tab.
 // It attaches to one ALREADY EXISTING page target, then issues the requested
 // Target.getTargets CDP method and discards the bootstrap snapshot.
+// Discover is the original lightweight, read-only listing API.
 func (c *Client) Discover(ctx context.Context) ([]Tab, error) {
+	var tabs []Tab
+	err := c.withTargets(ctx, func(_ context.Context, found []Tab) error {
+		tabs = found
+		return nil
+	})
+	return tabs, err
+}
+
+// withTargets owns one remote browser session and shares it with any sampling
+// children. Every context attaches to a user-owned tab in detach-only mode.
+// This prevents unnecessary WebSocket connections and accidental tab closure.
+func (c *Client) withTargets(ctx context.Context, visit func(context.Context, []Tab) error) error {
 	ctx, cancel := context.WithTimeout(ctx, c.timeout)
 	defer cancel()
 	var version versionResponse
 	if err := c.jsonGET(ctx, "/json/version", &version); err != nil {
-		return nil, fmt.Errorf("Chrome CDP endpoint %s is unavailable; on macOS run `make run-debug` to launch an isolated debugging profile (not your normal Chrome tabs): %w", c.endpoint.String(), err)
+		return fmt.Errorf("Chrome CDP endpoint %s is unavailable; on macOS run `make run-debug` to launch an isolated debugging profile (not your normal Chrome tabs): %w", c.endpoint.String(), err)
 	}
 	ws, err := url.Parse(version.WebSocketDebuggerURL)
 	if err != nil || ws.Scheme != "ws" || !loopbackHost(ws.Hostname()) ||
 		ws.User != nil || ws.Port() == "" || ws.Port() != c.endpoint.Port() ||
 		!strings.HasPrefix(ws.Path, "/devtools/browser/") || ws.RawQuery != "" || ws.Fragment != "" {
-		return nil, errors.New("Chrome returned an invalid or non-loopback browser WebSocket debugger URL")
+		return errors.New("Chrome returned an invalid or non-loopback browser WebSocket debugger URL")
 	}
 	var discovered []pageResponse
 	if err := c.jsonGET(ctx, "/json/list", &discovered); err != nil {
-		return nil, err
+		return err
 	}
 	bootstrapID := ""
 	for _, page := range discovered {
@@ -136,7 +149,7 @@ func (c *Client) Discover(ctx context.Context) ([]Tab, error) {
 	}
 	if bootstrapID == "" {
 		// No page exists to attach without creating a new tab.
-		return []Tab{}, nil
+		return visit(ctx, []Tab{})
 	}
 
 	// Version 0.21 uses chromedp/remote and the typed cdproto Call API.
@@ -163,7 +176,7 @@ func (c *Client) Discover(ctx context.Context) ([]Tab, error) {
 		infos = result.TargetInfos
 		return nil
 	})); err != nil {
-		return nil, fmt.Errorf("Target.getTargets (bootstrap target %s): %w", bootstrapID, err)
+		return fmt.Errorf("Target.getTargets (bootstrap target %s): %w", bootstrapID, err)
 	}
 
 	tabs := make([]Tab, 0, len(infos))
@@ -179,7 +192,7 @@ func (c *Client) Discover(ctx context.Context) ([]Tab, error) {
 		})
 	}
 	sort.Slice(tabs, func(i, j int) bool { return tabs[i].TargetID < tabs[j].TargetID })
-	return tabs, nil
+	return visit(tabCtx, tabs)
 }
 
 // Domain provides the parsed hostname, not a guessed registrable domain.
