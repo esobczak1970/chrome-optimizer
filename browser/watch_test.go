@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -17,12 +18,16 @@ func TestWatchSamplerRetainsEpochAndReconcilesTargets(t *testing.T) {
 	w := newWatchSampler(ctx, time.Second)
 	defer w.close()
 	samples := make(map[string]int)
+	var mu sync.Mutex
 	w.sampler = func(session *watchedTarget, tab Tab, _ time.Duration) TabInfo {
+		mu.Lock()
 		samples[tab.TargetID]++
+		count := samples[tab.TargetID]
+		mu.Unlock()
 		return TabInfo{
-			Tab:                tab,
-			MetricSessionEpoch: session.epoch,
-			TaskDurationSeconds: floatPtr(float64(samples[tab.TargetID])),
+			Tab:                 tab,
+			MetricSessionEpoch:  session.epoch,
+			TaskDurationSeconds: floatPtr(float64(count)),
 		}
 	}
 	tabs := []Tab{{TargetID: "A", Title: "First"}, {TargetID: "B", Title: "Second"}}
