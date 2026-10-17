@@ -144,7 +144,12 @@ func (c *Client) Discover(ctx context.Context) ([]Tab, error) {
 	// debugger URL was validated above as local and on the expected port.
 	allocatorCtx, cancelAllocator := remote.NewAllocator(ctx, ws.String(), remote.NoModifyURL)
 	defer cancelAllocator()
-	tabCtx, cancelTab := chromedp.NewContext(allocatorCtx, chromedp.WithTargetID(target.ID(bootstrapID)))
+	tabCtx, cancelTab := chromedp.NewContext(allocatorCtx,
+		chromedp.WithTargetID(target.ID(bootstrapID)),
+		// chromedp v0.21 closes attached existing tabs by default on
+		// cancellation. This tool does not own Chrome's tabs: detach only.
+		chromedp.WithDetachOnCancel(),
+	)
 	defer cancelTab()
 	var infos []*target.Info
 	if err := chromedp.Do(tabCtx, chromedp.Func(func(runCtx context.Context, _ *chromedp.Target) error {
