@@ -9,7 +9,7 @@ import (
 	"github.com/esobczak1970/chrome-optimizer/browser"
 )
 
-func u(v uint64) *uint64 { return &v }
+func u(v uint64) *uint64   { return &v }
 func f(v float64) *float64 { return &v }
 
 func TestSortInfosUnknownAlwaysLast(t *testing.T) {
@@ -61,12 +61,12 @@ func TestActivitySortingAndTieBreak(t *testing.T) {
 
 func TestRenderMetricsLabelsAndMissingValues(t *testing.T) {
 	tab := browser.TabInfo{
-		Tab: browser.Tab{TargetID: "a", Domain: "example.test", Title: "Hello\nWorld", URL: "https://example.test"},
-		JSHeapUsedBytes: u(1048576),
+		Tab:                 browser.Tab{TargetID: "a", Domain: "example.test", Title: "Hello\nWorld", URL: "https://example.test"},
+		JSHeapUsedBytes:     u(1048576),
 		TaskDurationSeconds: f(2.5),
 	}
 	missing := browser.TabInfo{
-		Tab: browser.Tab{TargetID: "b", Domain: "chrome:", Title: "New Tab", URL: "chrome://newtab/"},
+		Tab:          browser.Tab{TargetID: "b", Domain: "chrome:", Title: "New Tab", URL: "chrome://newtab/"},
 		MetricsError: "not supported",
 	}
 	var out bytes.Buffer
