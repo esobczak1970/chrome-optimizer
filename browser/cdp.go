@@ -195,7 +195,9 @@ func (c *Client) withTargetSession(ctx context.Context, avoidID string, visit fu
 	})); err != nil {
 		return fmt.Errorf("Target.getTargets (bootstrap target %s): %w", bootstrapID, err)
 	}
-
+	// Initialization is complete. Stop the watchdog now so it cannot
+	// cancel the persistent browser connection during later refreshes.
+	initTimer.Stop()
 	return visit(tabCtx, tabsFromInfos(infos))
 }
 
