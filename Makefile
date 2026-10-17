@@ -22,6 +22,7 @@ help:
 	  '  make build         Build CLI' \
 	  '  make check         Format, vet, test, and build' \
 	  '  make run           Sample an already-debuggable Chrome (read-only)' \
+	  '  make run ARGS="--compact --filter=news"      Search in a compact table' \
 	  '  make run ARGS="--freeze=ID --confirm-freeze"  Freeze a hidden page explicitly' \
 	  '  make run ARGS="--resume=ID"                 Resume a selected page explicitly' \
 	  '  make chrome-start  Start a separate Chrome debugging profile (macOS)' \
