@@ -121,6 +121,27 @@ the Target IDs persist across consecutive invocations, and confirm that
 no tab closes when Chrome Optimizer exits. Check `make check` and
 `make test-race` locally before treating the phase as validated.
 
+## Search and compact terminal view
+
+For narrow macOS Terminal windows, use `--compact` to display a shorter ID,
+bounded domain/title columns, resource metrics, activity time and status. It
+intentionally omits full URLs and query strings from terminal output.
+
+```bash
+make run ARGS="--compact --sort=memory --desc"
+make run ARGS="--filter=news --compact"
+make run ARGS="--watch --filter=example.com --compact --sort=activity --desc"
+```
+
+`--filter` performs case-insensitive substring matching against the
+TargetID, domain, title and URL. It is in-memory and affects display only:
+monitoring still observes all discovered tabs. If nothing matches, the CLI
+shows an explicit no-match message rather than suggesting Chrome has no tabs.
+The regular output remains available when a full TargetID or URL is needed.
+
+The filtering helper is shared by the CLI and future Fyne view model; no
+Fyne runtime is required for headless Chrome monitoring.
+
 ## Explicit background-tab freeze and resume (experimental)
 
 **Normal `make run` and `--watch` are read-only.** Freezing requires a
