@@ -15,6 +15,8 @@ func TestLifecycleCLIRejectsUnsafeFlagsBeforeNetwork(t *testing.T) {
 	}{
 		{"freeze requires consent", []string{"--freeze=EXACT_ID"}, "--confirm-freeze"},
 		{"confirm alone", []string{"--confirm-freeze"}, "requires --freeze"},
+		{"empty freeze selector", []string{"--freeze=", "--confirm-freeze"}, "requires a complete TargetID"},
+		{"empty resume selector", []string{"--resume="}, "requires a complete TargetID"},
 		{"mutually exclusive", []string{"--freeze=TARGET_A", "--resume=TARGET_B", "--confirm-freeze"}, "mutually exclusive"},
 		{"watch freeze", []string{"--freeze=TARGET_A", "--confirm-freeze", "--watch"}, "read-only"},
 		{"watch resume", []string{"--resume=TARGET_A", "--watch"}, "read-only"},
