@@ -83,6 +83,9 @@ type watchSampler struct {
 	timeout  time.Duration
 	sessions map[string]*watchedTarget
 	next     uint64
+	// sampler is replaced only in package tests; production uses the real
+	// CDP action implemented by watchedTarget.sample.
+	sampler func(*watchedTarget, Tab, time.Duration) TabInfo
 }
 
 func newWatchSampler(parent context.Context, timeout time.Duration) *watchSampler {
@@ -125,6 +128,9 @@ func (w *watchSampler) sample(tabs []Tab) []TabInfo {
 		session := w.sessions[tab.TargetID]
 		if session == nil {
 			return TabInfo{Tab: tab, MetricsError: "watch instrumentation limit reached (64 target sessions)"}
+		}
+		if w.sampler != nil {
+			return w.sampler(session, tab, w.timeout)
 		}
 		return session.sample(tab, w.timeout)
 	})
