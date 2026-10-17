@@ -25,9 +25,9 @@ type TabInfo struct {
 	ObservedTaskActivityAt *time.Time
 	// MetricSessionEpoch is nonzero for a persistent watch attachment.
 	// A changed epoch invalidates TaskDuration comparisons after reattach.
-	MetricSessionEpoch      uint64
-	SampledAt              time.Time
-	MetricsError           string
+	MetricSessionEpoch uint64
+	SampledAt          time.Time
+	MetricsError       string
 }
 
 // Collect attaches to an existing browser and samples its existing page
