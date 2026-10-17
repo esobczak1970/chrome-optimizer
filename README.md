@@ -78,8 +78,12 @@ Config values live in `config.yaml` and use strict YAML (unknown keys and multip
 ## Tab metrics, sorting, and watch mode
 
 The default `make run` collects `Performance.getMetrics` from currently
-open page targets, using at most four simultaneous target sessions and a
-shared Chrome browser connection. A tab that disappears or refuses metrics
+open page targets, using at most four simultaneous sampling operations and a
+shared Chrome browser connection. In `--watch` mode the browser connection
+remains open and each monitored target retains its Performance session between
+refreshes. This enables valid `TaskDuration` comparisons **within one session**.
+Watch mode retains at most 64 existing target attachments; additional tabs
+appear with an explicit session-limit status. A tab that disappears or refuses metrics
 appears with `-` readings and its error status, not invented zeros. No
 tab is navigated, frozen, or closed: all attachments use
 `chromedp.WithDetachOnCancel()`.
@@ -105,15 +109,22 @@ with permitted values from 1s to 1m.
   Chrome's resident memory, compressed memory, GPU allocation, or overall
   per-tab RAM.
 - **TASK TIME s:** `TaskDuration`, a cumulative execution duration supplied
-  by CDP. It is not a CPU usage percentage.
+  by CDP. A one-shot scan collects it briefly; in watch mode, the counter
+  stays tied to a persistent target instrumentation session. It can reset
+  after navigation/reconnection. It is not a CPU usage percentage.
+  Small nonzero values are shown with additional decimal precision.
 - **LAST TASK ACTIVITY:** A timestamp **first available after at least two
   samples within one running `--watch` invocation** when TaskDuration
-  increases. Background scripts can increment it too. This is **not**
-  actual last user access, browser focus history, or a historical last-used
-  timestamp. `-` means no observed evidence yet.
+  increases **within the same target session**. On tab closure, instrumentation
+  error or reattachment, the activity baseline resets rather than comparing
+  unrelated counters. Background scripts can increment it too. This is
+  **not** actual last user access, browser focus history, or a historical
+  last-used timestamp. `-` means no observed evidence yet.
 
 The implementation does not persist URLs, titles, metrics, or browsing history
 to disk. Closing or restarting the CLI resets its in-memory observations.
+Persistent watch target contexts always detach without closing user tabs.
+Consecutive no-match messages are suppressed until matching tabs reappear.
 
 **Live testing:** On a real macOS Chrome debugging session, open at least
 two ordinary web pages, run the metrics/sorting commands above, verify that
