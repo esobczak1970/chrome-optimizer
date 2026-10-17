@@ -177,7 +177,12 @@ func (c *Client) withTargetSession(ctx context.Context, avoidID string, visit fu
 	)
 	defer cancelTab()
 	var infos []*target.Info
-	if err := chromedp.Do(tabCtx, chromedp.Func(func(runCtx context.Context, _ *chromedp.Target) error {
+	// A long-lived watch must bound initial chromedp target attachment too.
+	// Only the initialization command uses this timeout; the target context
+	// itself remains live until monitoring stops.
+	initCtx, cancelInit := context.WithTimeout(tabCtx, c.timeout)
+	defer cancelInit()
+	if err := chromedp.Do(initCtx, chromedp.Func(func(runCtx context.Context, _ *chromedp.Target) error {
 		// Target is a browser-scope domain. Calling it through the browser
 		// session avoids incorrectly treating this as page instrumentation.
 		result, err := cdp.Call(runCtx, chromedp.FromContext(runCtx).Browser,
