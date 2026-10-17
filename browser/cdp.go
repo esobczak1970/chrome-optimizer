@@ -148,13 +148,7 @@ func (c *Client) withTargetsAvoid(ctx context.Context, avoidID string, visit fun
 	if err := c.jsonGET(ctx, "/json/list", &discovered); err != nil {
 		return err
 	}
-	bootstrapID := ""
-	for _, page := range discovered {
-		if page.Type == "page" && page.ID != "" && page.ID != avoidID {
-			bootstrapID = page.ID
-			break
-		}
-	}
+	bootstrapID := pickBootstrapTarget(discovered, avoidID)
 	if bootstrapID == "" {
 		if avoidID != "" {
 			return errors.New("lifecycle action needs another open page as a CDP helper; open an additional tab in the debugging Chrome window and retry")
@@ -204,6 +198,18 @@ func (c *Client) withTargetsAvoid(ctx context.Context, avoidID string, visit fun
 	}
 	sort.Slice(tabs, func(i, j int) bool { return tabs[i].TargetID < tabs[j].TargetID })
 	return visit(tabCtx, tabs)
+}
+
+// pickBootstrapTarget only attaches to a pre-existing page. Lifecycle
+// operations must never bootstrap through their selected target, which could
+// already be frozen and unable to run chromedp's initialization commands.
+func pickBootstrapTarget(discovered []pageResponse, avoidID string) string {
+	for _, candidate := range discovered {
+		if candidate.Type == "page" && candidate.ID != "" && candidate.ID != avoidID {
+			return candidate.ID
+		}
+	}
+	return ""
 }
 
 // Domain provides the parsed hostname, not a guessed registrable domain.
