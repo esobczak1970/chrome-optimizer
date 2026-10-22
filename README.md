@@ -45,7 +45,7 @@ endpoint; otherwise the launcher refuses to start a competing process.
 
 ## Requirements
 
-- macOS Apple Silicon, Go **1.27.2**
+- macOS Apple Silicon, Go **1.27.3**
 - Google Chrome installed, running in a **separate debugging profile**
 - CDP endpoint bound to **loopback** (default `http://127.0.0.1:9222`)
 
