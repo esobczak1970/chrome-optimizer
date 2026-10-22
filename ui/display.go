@@ -6,6 +6,7 @@ import (
 	"cmp"
 	"fmt"
 	"io"
+	"math"
 	"slices"
 	"strings"
 	"text/tabwriter"
@@ -29,7 +30,7 @@ func SortInfos(input []browser.TabInfo, key string, desc bool) []browser.TabInfo
 				comparison = cmp.Compare(*a.JSHeapUsedBytes, *b.JSHeapUsedBytes)
 			}
 		case "cpu":
-			missingA, missingB = a.TaskDurationSeconds == nil, b.TaskDurationSeconds == nil
+			missingA, missingB = !validTaskDuration(a.TaskDurationSeconds), !validTaskDuration(b.TaskDurationSeconds)
 			if !missingA && !missingB {
 				comparison = cmp.Compare(*a.TaskDurationSeconds, *b.TaskDurationSeconds)
 			}
@@ -102,7 +103,7 @@ func renderMetrics(w io.Writer, input []browser.TabInfo, key string, desc, compa
 		if tab.JSHeapUsedBytes != nil {
 			memory = fmt.Sprintf("%.1f", float64(*tab.JSHeapUsedBytes)/(1024*1024))
 		}
-		if tab.TaskDurationSeconds != nil {
+		if validTaskDuration(tab.TaskDurationSeconds) {
 			cpu = fmt.Sprintf("%.3f", *tab.TaskDurationSeconds)
 			if *tab.TaskDurationSeconds > 0 && *tab.TaskDurationSeconds < 0.01 {
 				cpu = fmt.Sprintf("%.6f", *tab.TaskDurationSeconds)
@@ -114,7 +115,7 @@ func renderMetrics(w io.Writer, input []browser.TabInfo, key string, desc, compa
 		status := "OK"
 		if tab.MetricsError != "" {
 			status = shorten(clean(tab.MetricsError), 66)
-		} else if tab.JSHeapUsedBytes == nil || tab.TaskDurationSeconds == nil {
+		} else if tab.JSHeapUsedBytes == nil || !validTaskDuration(tab.TaskDurationSeconds) {
 			status = "partial / unsupported"
 		}
 		if compact {
@@ -135,6 +136,12 @@ func renderMetrics(w io.Writer, input []browser.TabInfo, key string, desc, compa
 	return tw.Flush()
 }
 
+// validTaskDuration guards all display paths against impossible counters.
+// A legitimate duration of zero must remain distinct from unknown data.
+func validTaskDuration(seconds *float64) bool {
+	return seconds != nil && !math.IsNaN(*seconds) && !math.IsInf(*seconds, 0) && *seconds >= 0
+}
+
 func shorten(s string, max int) string {
 	r := []rune(s)
 	if len(r) <= max {
@@ -145,7 +152,7 @@ func shorten(s string, max int) string {
 
 func clean(s string) string {
 	return strings.Map(func(r rune) rune {
-		if unicode.IsControl(r) {
+		if unicode.IsControl(r) || unicode.Is(unicode.Cf, r) {
 			return ' '
 		}
 		return r
