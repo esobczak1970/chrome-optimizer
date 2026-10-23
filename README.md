@@ -120,6 +120,14 @@ with permitted values from 1s to 1m.
   unrelated counters. Background scripts can increment it too. This is
   **not** actual last user access, browser focus history, or a historical
   last-used timestamp. `-` means no observed evidence yet.
+- **Task-time sampling window (API):** `browser.TabInfo.TaskDeltaSeconds`
+  and `TaskSampleWindowSeconds` expose the nonnegative increase in cumulative
+  TaskDuration and elapsed seconds between two *valid* watch samples from the
+  same CDP session. These fields are nil on the first reading, after errors,
+  counter resets, reattachments, or out-of-order timestamps. Zero delta on a
+  valid window means no additional task time was observed. They are not
+  CPU utilization, physical memory, tab focus, or proof of user interaction.
+  The default terminal view still shows cumulative task time, not these deltas.
 
 The implementation does not persist URLs, titles, metrics, or browsing history
 to disk. Closing or restarting the CLI resets its in-memory observations.
