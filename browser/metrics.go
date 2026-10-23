@@ -22,6 +22,11 @@ type TabInfo struct {
 	Tab
 	JSHeapUsedBytes        *uint64
 	TaskDurationSeconds    *float64
+	// TaskDeltaSeconds is the measured increase in cumulative CDP task time.
+	// TaskSampleWindowSeconds is the elapsed interval between valid readings.
+	// Neither field represents CPU percentage or historical user activity.
+	TaskDeltaSeconds        *float64
+	TaskSampleWindowSeconds *float64
 	ObservedTaskActivityAt *time.Time
 	// MetricSessionEpoch is nonzero for a persistent watch attachment.
 	// A changed epoch invalidates TaskDuration comparisons after reattach.
@@ -157,8 +162,9 @@ func parseMetrics(metrics []*performance.Metric) (*uint64, *float64) {
 // No browser history, URL, or title is persisted. It is suitable for a watch
 // session; the initial sample alone cannot establish a "last used" timestamp.
 type taskBaseline struct {
-	duration float64
-	epoch    uint64
+	duration  float64
+	epoch     uint64
+	sampledAt time.Time
 }
 
 type TaskActivityTracker struct {
@@ -176,30 +182,52 @@ func NewTaskActivityTracker() *TaskActivityTracker {
 // Observe compares samples at a known wall clock time. A reset or a vanished
 // target clears history rather than misrepresenting an old measurement.
 // Only task execution activity is inferred: background tasks may also qualify.
+// Observe compares only valid, chronologically ordered counter readings from
+// one stable Performance session. Invalid/error samples discard the baseline;
+// missing evidence never becomes a fabricated last-used timestamp.
 func (a *TaskActivityTracker) Observe(infos []TabInfo, now time.Time) {
 	seen := make(map[string]bool, len(infos))
 	for i := range infos {
 		info := &infos[i]
 		id := info.TargetID
 		seen[id] = true
-		if info.TaskDurationSeconds == nil {
+		info.ObservedTaskActivityAt = nil
+		info.TaskDeltaSeconds = nil
+		info.TaskSampleWindowSeconds = nil
+
+		current := info.TaskDurationSeconds
+		if info.MetricsError != "" || current == nil || math.IsNaN(*current) || math.IsInf(*current, 0) || *current < 0 {
 			delete(a.previous, id)
 			delete(a.last, id)
 		} else {
-			current := *info.TaskDurationSeconds
+			observedAt := info.SampledAt
+			if observedAt.IsZero() {
+				// Synthetic callers may supply only the timestamp for this
+				// observation; real CDP samples always contain SampledAt.
+				observedAt = now
+			}
 			if prior, ok := a.previous[id]; ok {
 				switch {
 				case prior.epoch != info.MetricSessionEpoch:
 					// Never compare unrelated Performance.enable sessions.
 					delete(a.last, id)
-				case current > prior.duration:
-					a.last[id] = now
-				case current < prior.duration:
-					// A counter reset also invalidates the activity history.
+				case *current < prior.duration:
+					// A reset invalidates the old task activity history.
 					delete(a.last, id)
+				case !observedAt.After(prior.sampledAt):
+					// Out-of-order / equal-time samples have no valid window.
+					delete(a.last, id)
+				default:
+					delta := *current - prior.duration
+					window := observedAt.Sub(prior.sampledAt).Seconds()
+					info.TaskDeltaSeconds = &delta
+					info.TaskSampleWindowSeconds = &window
+					if delta > 0 {
+						a.last[id] = observedAt
+					}
 				}
 			}
-			a.previous[id] = taskBaseline{duration: current, epoch: info.MetricSessionEpoch}
+			a.previous[id] = taskBaseline{duration: *current, epoch: info.MetricSessionEpoch, sampledAt: observedAt}
 		}
 		if t, ok := a.last[id]; ok {
 			copy := t
