@@ -142,9 +142,18 @@ no tab closes when Chrome Optimizer exits. Check `make check` and
 
 ## Search and compact terminal view
 
-For narrow macOS Terminal windows, use `--compact` to display a shorter ID,
-bounded domain/title columns, resource metrics, activity time and status. It
-intentionally omits full URLs and query strings from terminal output.
+Interactive terminal output now measures the current terminal width on every
+render, automatically bounds columns and switches to separate labeled records
+for very narrow windows. The `--watch` command responds to a resize on its next
+refresh. The adaptive table retains explicit JS heap/task units, shows unknown
+values as `-`, and shortens long Unicode titles, IDs, and URLs without inserting
+terminal control codes. It is safe to use `--compact` for a deliberately shorter
+view: compact mode never displays the full URL or its query string.
+
+Redirected output (pipes, files and non-TTY CI logs) intentionally retains the
+previous deterministic full/compact format, without width-based truncation.
+The width-aware view is provided on macOS, Linux and FreeBSD; on other platforms
+it falls back to that same deterministic non-TTY format.
 
 ```bash
 make run ARGS="--compact --sort=memory --desc"
