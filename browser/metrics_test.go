@@ -172,3 +172,94 @@ func TestTaskActivityTrackerDoesNotCompareDifferentCDPSessions(t *testing.T) {
 		t.Fatal("activity after valid second sample was not detected")
 	}
 }
+
+func TestTaskActivityTrackerMeasuresOnlyValidSampleWindows(t *testing.T) {
+	tracker := NewTaskActivityTracker()
+	base := time.Date(2026, 10, 23, 15, 0, 0, 0, time.UTC)
+	makeSample := func(seconds float64, at time.Time) []TabInfo {
+		return []TabInfo{{
+			Tab:                 Tab{TargetID: "tab-1"},
+			MetricSessionEpoch:  9,
+			TaskDurationSeconds: floatPtr(seconds),
+			SampledAt:           at,
+		}}
+	}
+	first := makeSample(2.25, base)
+	tracker.Observe(first, base.Add(time.Second))
+	if first[0].TaskDeltaSeconds != nil || first[0].TaskSampleWindowSeconds != nil {
+		t.Fatal("first reading must not invent a sampling window")
+	}
+
+	second := makeSample(3.75, base.Add(2*time.Second))
+	tracker.Observe(second, base.Add(5*time.Second))
+	if second[0].TaskDeltaSeconds == nil || *second[0].TaskDeltaSeconds != 1.5 ||
+		second[0].TaskSampleWindowSeconds == nil || *second[0].TaskSampleWindowSeconds != 2 {
+		t.Fatalf("incorrect measured task-time delta or sample window: %+v", second[0])
+	}
+	if second[0].ObservedTaskActivityAt == nil || !second[0].ObservedTaskActivityAt.Equal(base.Add(2*time.Second)) {
+		t.Fatalf("activity timestamp must be the CDP sample time, not callback time: %+v", second[0])
+	}
+
+	steady := makeSample(3.75, base.Add(4*time.Second))
+	tracker.Observe(steady, base.Add(6*time.Second))
+	if steady[0].TaskDeltaSeconds == nil || *steady[0].TaskDeltaSeconds != 0 ||
+		steady[0].TaskSampleWindowSeconds == nil || *steady[0].TaskSampleWindowSeconds != 2 {
+		t.Fatalf("unchanged counters must produce a measured zero (not unknown): %+v", steady[0])
+	}
+	if steady[0].ObservedTaskActivityAt == nil || !steady[0].ObservedTaskActivityAt.Equal(base.Add(2*time.Second)) {
+		t.Fatal("unchanged counter must preserve the actual last observed increase")
+	}
+
+	outOfOrder := makeSample(4, base.Add(time.Second))
+	tracker.Observe(outOfOrder, base.Add(7*time.Second))
+	if outOfOrder[0].TaskDeltaSeconds != nil || outOfOrder[0].TaskSampleWindowSeconds != nil ||
+		outOfOrder[0].ObservedTaskActivityAt != nil {
+		t.Fatalf("out-of-order samples must discard windows/activity: %+v", outOfOrder[0])
+	}
+	recovered := makeSample(4.25, base.Add(5*time.Second))
+	tracker.Observe(recovered, base.Add(8*time.Second))
+	if recovered[0].TaskDeltaSeconds == nil || *recovered[0].TaskDeltaSeconds != 0.25 ||
+		recovered[0].TaskSampleWindowSeconds == nil || *recovered[0].TaskSampleWindowSeconds != 4 {
+		t.Fatalf("post-reset sample should have a new valid window: %+v", recovered[0])
+	}
+}
+
+func TestTaskActivityTrackerRejectsInvalidCountersAndFailedSamples(t *testing.T) {
+	cases := []struct {
+		name string
+		task *float64
+		err  string
+	}{
+		{name: "missing"},
+		{name: "not-a-number", task: floatPtr(math.NaN())},
+		{name: "infinite", task: floatPtr(math.Inf(1))},
+		{name: "negative", task: floatPtr(-0.1)},
+		{name: "failed-reading", task: floatPtr(100), err: "target detached"},
+	}
+	base := time.Date(2026, 10, 23, 16, 0, 0, 0, time.UTC)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tracker := NewTaskActivityTracker()
+			tracker.Observe([]TabInfo{{Tab: Tab{TargetID: "a"}, TaskDurationSeconds: floatPtr(1)}}, base)
+			increase := []TabInfo{{Tab: Tab{TargetID: "a"}, TaskDurationSeconds: floatPtr(2)}}
+			tracker.Observe(increase, base.Add(time.Second))
+			if increase[0].ObservedTaskActivityAt == nil {
+				t.Fatal("expected initial valid activity")
+			}
+			bad := []TabInfo{{
+				Tab: Tab{TargetID: "a"}, TaskDurationSeconds: tc.task,
+				MetricsError: tc.err,
+			}}
+			tracker.Observe(bad, base.Add(2*time.Second))
+			if bad[0].TaskDeltaSeconds != nil || bad[0].TaskSampleWindowSeconds != nil ||
+				bad[0].ObservedTaskActivityAt != nil {
+				t.Fatalf("bad sample must not retain activity or delta: %+v", bad[0])
+			}
+			next := []TabInfo{{Tab: Tab{TargetID: "a"}, TaskDurationSeconds: floatPtr(9)}}
+			tracker.Observe(next, base.Add(3*time.Second))
+			if next[0].TaskDeltaSeconds != nil || next[0].ObservedTaskActivityAt != nil {
+				t.Fatal("reading after invalid sample must be a fresh baseline")
+			}
+		})
+	}
+}

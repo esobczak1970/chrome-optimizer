@@ -60,7 +60,7 @@ func TestRenderCompactShowsTinyNonzeroTaskDuration(t *testing.T) {
 	tiny := 0.000416
 	var output bytes.Buffer
 	tab := browser.TabInfo{
-		Tab: browser.Tab{TargetID: "test", Domain: "example.com"},
+		Tab:                 browser.Tab{TargetID: "test", Domain: "example.com"},
 		TaskDurationSeconds: &tiny,
 	}
 	if err := RenderMetricsCompact(&output, []browser.TabInfo{tab}, "cpu", true); err != nil {

@@ -2,8 +2,8 @@ package ui
 
 import (
 	"bytes"
-	"math"
 	"io"
+	"math"
 	"strings"
 	"testing"
 
@@ -53,14 +53,14 @@ func TestRenderMetricsInvalidDurationAndUnicodeControl(t *testing.T) {
 	info := browser.TabInfo{
 		Tab: browser.Tab{
 			TargetID: "id",
-			Domain: "example.com",
-			Title: "trusted\u202eevil\u202c title",
+			Domain:   "example.com",
+			Title:    "trusted\u202eevil\u202c title",
 		},
 		TaskDurationSeconds: &bad,
 	}
 	for _, render := range []struct {
 		name string
-		fn func(w io.Writer, infos []browser.TabInfo, key string, desc bool) error
+		fn   func(w io.Writer, infos []browser.TabInfo, key string, desc bool) error
 	}{
 		{"full", RenderMetrics},
 		{"compact", RenderMetricsCompact},
