@@ -148,10 +148,7 @@ func run(ctx context.Context, args []string, out, errOut io.Writer) error {
 				return err
 			}
 		}
-		if *compact {
-			return ui.RenderMetricsCompact(out, tabs, cfg.DefaultSort, *desc)
-		}
-		return ui.RenderMetrics(out, tabs, cfg.DefaultSort, *desc)
+		return ui.RenderMetricsAuto(out, tabs, cfg.DefaultSort, *desc, *compact)
 	}
 	if *watch {
 		// Unlike one-shot Collect, Watch retains CDP instrumentation so its
