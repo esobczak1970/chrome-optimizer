@@ -65,3 +65,24 @@ func TestWidthRenderRejectsNonpositive(t *testing.T) {
 		t.Fatal("width zero accepted")
 	}
 }
+
+func TestAutoRenderKeepsRedirectedOutputStable(t *testing.T) {
+	info := browser.TabInfo{Tab: browser.Tab{
+		TargetID: "a-long-identity", Domain: "example.test", Title: "Visible title",
+		URL: "https://example.test/path?internal=not-private",
+	}}
+	var normal bytes.Buffer
+	if err := RenderMetricsAuto(&normal, []browser.TabInfo{info}, "domain", false, false); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(normal.String(), info.URL) {
+		t.Fatalf("non-TTY full output unexpectedly removed URL: %q", normal.String())
+	}
+	var compact bytes.Buffer
+	if err := RenderMetricsAuto(&compact, []browser.TabInfo{info}, "domain", false, true); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(compact.String(), info.URL) {
+		t.Fatalf("non-TTY compact output leaked full URL: %q", compact.String())
+	}
+}
