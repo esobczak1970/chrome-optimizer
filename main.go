@@ -143,8 +143,7 @@ func run(ctx context.Context, args []string, out, errOut io.Writer) error {
 		}
 		noMatchesReported = false
 		if *watch {
-			if _, err := fmt.Fprintf(out, "\n%s | %d matching tabs | JS heap is not total RAM; task time is not CPU%%\n",
-				time.Now().Local().Format(time.RFC3339), len(tabs)); err != nil {
+			if err := ui.RenderWatchHeader(out, time.Now(), len(tabs)); err != nil {
 				return err
 			}
 		}

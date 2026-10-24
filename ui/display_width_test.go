@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/esobczak1970/chrome-optimizer/browser"
 )
@@ -84,5 +85,33 @@ func TestAutoRenderKeepsRedirectedOutputStable(t *testing.T) {
 	}
 	if strings.Contains(compact.String(), info.URL) {
 		t.Fatalf("non-TTY compact output leaked full URL: %q", compact.String())
+	}
+}
+
+func TestWatchHeaderFitsNarrowTerminalsAndPreservesNotices(t *testing.T) {
+	now := time.Date(2026, time.October, 24, 12, 0, 0, 0, time.UTC)
+	for _, width := range []int{35, 50, 80, 120, 180} {
+		var out bytes.Buffer
+		if err := renderWatchHeaderWidth(&out, now, 1, width); err != nil {
+			t.Fatal(err)
+		}
+		for _, line := range strings.Split(out.String(), "\n") {
+			if len([]rune(line)) > width {
+				t.Fatalf("watch header overflows %d columns: %q", width, line)
+			}
+		}
+		for _, notice := range []string{"JS heap is not total RAM;", "task time is not CPU%"} {
+			if !strings.Contains(out.String(), notice) {
+				t.Fatalf("missing metric distinction %q: %q", notice, out.String())
+			}
+		}
+	}
+	var redirected bytes.Buffer
+	if err := RenderWatchHeader(&redirected, now, 1); err != nil {
+		t.Fatal(err)
+	}
+	expected := "\n" + now.Local().Format(time.RFC3339) + " | 1 matching tabs | JS heap is not total RAM; task time is not CPU%\n"
+	if redirected.String() != expected {
+		t.Fatalf("redirected watch header changed: %q", redirected.String())
 	}
 }

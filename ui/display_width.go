@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/esobczak1970/chrome-optimizer/browser"
@@ -197,4 +198,28 @@ func fitTerminal(source string, width int) string {
 		b.WriteString(strings.Repeat(" ", width-used))
 	}
 	return b.String()
+}
+
+// RenderWatchHeader keeps watch notices within the current terminal width.
+// Redirected output retains the existing single-line header.
+func RenderWatchHeader(w io.Writer, now time.Time, count int) error {
+	return renderWatchHeaderWidth(w, now, count, terminalColumns(w))
+}
+
+func renderWatchHeaderWidth(w io.Writer, now time.Time, count, width int) error {
+	summary := fmt.Sprintf("%s | %d matching tabs", now.Local().Format(time.RFC3339), count)
+	header := summary + " | JS heap is not total RAM; task time is not CPU%"
+	if width <= 0 || len(header) <= width {
+		_, err := fmt.Fprintf(w, "\n%s\n", header)
+		return err
+	}
+	if _, err := fmt.Fprintln(w); err != nil {
+		return err
+	}
+	for _, line := range []string{summary, "JS heap is not total RAM;", "task time is not CPU%"} {
+		if _, err := fmt.Fprintln(w, strings.TrimRight(fitTerminal(line, width), " ")); err != nil {
+			return err
+		}
+	}
+	return nil
 }
