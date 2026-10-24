@@ -173,7 +173,6 @@ func TestTaskActivityTrackerDoesNotCompareDifferentCDPSessions(t *testing.T) {
 	}
 }
 
-
 func TestTaskActivityTrackerMeasuresOnlyValidSampleWindows(t *testing.T) {
 	tracker := NewTaskActivityTracker()
 	base := time.Date(2026, 10, 23, 15, 0, 0, 0, time.UTC)

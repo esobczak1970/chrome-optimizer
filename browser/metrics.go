@@ -20,14 +20,14 @@ import (
 // monitoring-derived task counter change, NOT proof of user interaction.
 type TabInfo struct {
 	Tab
-	JSHeapUsedBytes        *uint64
-	TaskDurationSeconds    *float64
+	JSHeapUsedBytes     *uint64
+	TaskDurationSeconds *float64
 	// TaskDeltaSeconds is the measured increase in cumulative CDP task time.
 	// TaskSampleWindowSeconds is the elapsed interval between valid readings.
 	// Neither field represents CPU percentage or historical user activity.
 	TaskDeltaSeconds        *float64
 	TaskSampleWindowSeconds *float64
-	ObservedTaskActivityAt *time.Time
+	ObservedTaskActivityAt  *time.Time
 	// MetricSessionEpoch is nonzero for a persistent watch attachment.
 	// A changed epoch invalidates TaskDuration comparisons after reattach.
 	MetricSessionEpoch uint64
