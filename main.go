@@ -143,15 +143,11 @@ func run(ctx context.Context, args []string, out, errOut io.Writer) error {
 		}
 		noMatchesReported = false
 		if *watch {
-			if _, err := fmt.Fprintf(out, "\n%s | %d matching tabs | JS heap is not total RAM; task time is not CPU%%\n",
-				time.Now().Local().Format(time.RFC3339), len(tabs)); err != nil {
+			if err := ui.RenderWatchHeader(out, time.Now(), len(tabs)); err != nil {
 				return err
 			}
 		}
-		if *compact {
-			return ui.RenderMetricsCompact(out, tabs, cfg.DefaultSort, *desc)
-		}
-		return ui.RenderMetrics(out, tabs, cfg.DefaultSort, *desc)
+		return ui.RenderMetricsAuto(out, tabs, cfg.DefaultSort, *desc, *compact)
 	}
 	if *watch {
 		// Unlike one-shot Collect, Watch retains CDP instrumentation so its
