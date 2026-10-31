@@ -45,7 +45,7 @@ endpoint; otherwise the launcher refuses to start a competing process.
 
 ## Requirements
 
-- macOS Apple Silicon, Go **1.27.3**
+- macOS Apple Silicon, Go (version from `.go-version`)
 - Google Chrome installed, running in a **separate debugging profile**
 - CDP endpoint bound to **loopback** (default `http://127.0.0.1:9222`)
 
@@ -122,7 +122,7 @@ with permitted values from 1s to 1m.
   last-used timestamp. `-` means no observed evidence yet.
 - **Task-time sampling window (API):** `browser.TabInfo.TaskDeltaSeconds`
   and `TaskSampleWindowSeconds` expose the nonnegative increase in cumulative
-  TaskDuration and elapsed seconds between two *valid* watch samples from the
+  TaskDuration and elapsed seconds between two _valid_ watch samples from the
   same CDP session. These fields are nil on the first reading, after errors,
   counter resets, reattachments, or out-of-order timestamps. Zero delta on a
   valid window means no additional task time was observed. They are not
@@ -209,3 +209,5 @@ The CLI never sends `SIGSTOP` or `SIGCONT`, navigates, discards, or closes tabs.
 ## Validation
 
 The unit tests cover strict YAML, URL/domain parsing, local endpoint protections, read-only empty discovery, unsafe browser WebSocket responses, and terminal sorting. A live CDP smoke test needs a local Chrome instance on macOS; Linux CI alone cannot certify macOS runtime behavior.
+
+Go toolchain selection is centralized in `.go-version`. Module `go`/`toolchain` directives mirror that pin because Go requires literal versions. Run `make go-version-check` to verify the contract before building.

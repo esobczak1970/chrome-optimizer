@@ -81,3 +81,9 @@ check: format-check vet test build
 
 clean:
 	rm -rf "$(BIN_DIR)"
+
+.PHONY: go-version-check
+go-version-check:
+	@bash scripts/check-go-version.sh
+
+doctor: go-version-check
