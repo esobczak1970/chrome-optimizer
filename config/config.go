@@ -17,6 +17,8 @@ const MaxTimeout = 60 * time.Second
 // Config represents the public YAML configuration. Keep transport details out
 // of the view layer. A duration is serialized as a YAML string such as "15s".
 type Config struct {
+	Compact      bool   `yaml:"compact"`
+	Descending   bool   `yaml:"descending"`
 	CDPEndpoint  string `yaml:"cdp_endpoint"`
 	Timeout      string `yaml:"timeout"`
 	DefaultSort  string `yaml:"default_sort"`

@@ -35,9 +35,9 @@ func run(ctx context.Context, args []string, out, errOut io.Writer) error {
 	configFile := flags.String("config", "config.yaml", "YAML configuration path")
 	endpoint := flags.String("endpoint", "", "override loopback CDP endpoint")
 	sortBy := flags.String("sort", "", "domain, title, id, memory, cpu or activity")
-	desc := flags.Bool("desc", false, "sort descending; unknown metrics always last")
+	flags.Bool("desc", false, "sort descending; unknown metrics always last")
 	filter := flags.String("filter", "", "case-insensitive substring search over target ID, domain, title and URL")
-	compact := flags.Bool("compact", false, "compact terminal view without full URLs")
+	flags.Bool("compact", false, "compact terminal view without full URLs")
 	watch := flags.Bool("watch", false, "resample periodically until interrupted")
 	intervalFlag := flags.Duration("interval", 0, "watch refresh interval (1s to 1m)")
 	freezeID := flags.String("freeze", "", "request freezing an exact background HTTP(S) tab TargetID")
@@ -91,6 +91,7 @@ func run(ctx context.Context, args []string, out, errOut io.Writer) error {
 	if !config.ValidSort(cfg.DefaultSort) {
 		return fmt.Errorf("unsupported sort %q: choose domain, title, id, memory, cpu, or activity", cfg.DefaultSort)
 	}
+	useDesc, useCompact := presentationOptions(flags, cfg)
 	timeout, err := cfg.Duration()
 	if err != nil {
 		return err
@@ -147,7 +148,7 @@ func run(ctx context.Context, args []string, out, errOut io.Writer) error {
 				return err
 			}
 		}
-		return ui.RenderMetricsAuto(out, tabs, cfg.DefaultSort, *desc, *compact)
+		return ui.RenderMetricsAuto(out, tabs, cfg.DefaultSort, useDesc, useCompact)
 	}
 	if *watch {
 		// Unlike one-shot Collect, Watch retains CDP instrumentation so its
@@ -159,4 +160,18 @@ func run(ctx context.Context, args []string, out, errOut io.Writer) error {
 		return err
 	}
 	return renderSample(tabs)
+}
+
+// Explicit boolean flags override YAML even when their value is false.
+func presentationOptions(flags *flag.FlagSet, cfg config.Config) (desc, compact bool) {
+	desc, compact = cfg.Descending, cfg.Compact
+	flags.Visit(func(f *flag.Flag) {
+		switch f.Name {
+		case "desc":
+			desc = f.Value.String() == "true"
+		case "compact":
+			compact = f.Value.String() == "true"
+		}
+	})
+	return
 }
