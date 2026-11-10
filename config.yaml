@@ -5,3 +5,7 @@ default_sort: domain
 
 # Watch mode refresh; task activity is observed only after the first sample.
 poll_interval: 5s
+
+# Presentation defaults; explicit CLI flags override either value.
+compact: false
+descending: false

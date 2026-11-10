@@ -211,3 +211,7 @@ The CLI never sends `SIGSTOP` or `SIGCONT`, navigates, discards, or closes tabs.
 The unit tests cover strict YAML, URL/domain parsing, local endpoint protections, read-only empty discovery, unsafe browser WebSocket responses, and terminal sorting. A live CDP smoke test needs a local Chrome instance on macOS; Linux CI alone cannot certify macOS runtime behavior.
 
 Go toolchain selection is centralized in `.go-version`. Module `go`/`toolchain` directives mirror that pin because Go requires literal versions. Run `make go-version-check` to verify the contract before building.
+
+Presentation defaults can be saved in YAML as `compact: true` and
+`descending: true`. Explicit `--compact=false` or `--desc=false` overrides
+those defaults for one invocation without modifying the configuration file.
