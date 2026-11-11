@@ -114,7 +114,7 @@ func TestParseMetricsDetailedDistinguishesUnavailableAndInvalid(t *testing.T) {
 	}
 }
 
-func metricHeap(value uint64) *uint64 { return &value }
+func metricHeap(value uint64) *uint64   { return &value }
 func metricTask(value float64) *float64 { return &value }
 
 func TestApplyPerformanceMetricsRetainsSourceAndPerFieldErrors(t *testing.T) {
@@ -206,16 +206,16 @@ func TestReadOneShotMetricsOrdersCommandsAndCleansUpFailures(t *testing.T) {
 	}{
 		{name: "success", wantSequence: "enable,get,disable"},
 		{
-			name: "enable failed",
-			enableError: errors.New("cannot enable"),
+			name:         "enable failed",
+			enableError:  errors.New("cannot enable"),
 			wantSequence: "enable",
-			wantError: errors.New("cannot enable"),
+			wantError:    errors.New("cannot enable"),
 		},
 		{
-			name: "read failed",
-			readError: errors.New("page closed"),
+			name:         "read failed",
+			readError:    errors.New("page closed"),
 			wantSequence: "enable,get,disable",
-			wantError: errors.New("page closed"),
+			wantError:    errors.New("page closed"),
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
