@@ -112,7 +112,7 @@ func renderMetrics(w io.Writer, input []browser.TabInfo, key string, desc, compa
 		if tab.ObservedTaskActivityAt != nil {
 			activity = tab.ObservedTaskActivityAt.Local().Format("15:04:05")
 		}
-		status := shorten(clean(metricStatus(tab)), 66)
+		status := shorten(clean(metricStatus(tab)), 96)
 		if compact {
 			if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
 				shorten(clean(tab.TargetID), 10), shorten(clean(tab.Domain), 26),
