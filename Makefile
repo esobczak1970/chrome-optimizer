@@ -9,7 +9,7 @@ BIN_DIR := $(CURDIR)/bin
 CHROME_DEBUG_PORT ?= 9222
 CHROME_DEBUG_PROFILE ?= $(HOME)/Library/Application Support/ChromeOptimizerDebug
 
-.PHONY: help doctor deps tidy format format-check lint vet test test-shell test-race build run run-debug chrome-start check clean
+.PHONY: help doctor deps tidy format format-check lint vet test test-shell test-race build run run-debug chrome-start modernize-check check clean
 
 help:
 	@printf '%s\n' 'chrome-optimizer development commands:' \
@@ -18,6 +18,7 @@ help:
 	  '  make format-check  Verify gofmt' \
 	  '  make lint          Run go vet (additional linter planned)' \
 	  '  make test          Run offline-compatible unit tests after deps' \
+	  '  make modernize-check Check for Go 1.27 modernization changes' \
 	  '  make test-race     Run race tests' \
 	  '  make build         Build CLI' \
 	  '  make check         Format, vet, test, and build' \
@@ -77,7 +78,10 @@ run-debug: deps
 	@$(MAKE) --no-print-directory chrome-start
 	$(GO) run . --endpoint="http://127.0.0.1:$(CHROME_DEBUG_PORT)" $(ARGS)
 
-check: format-check vet test build
+modernize-check: deps
+	$(GO) fix -diff ./...
+
+check: format-check vet modernize-check test build
 
 clean:
 	rm -rf "$(BIN_DIR)"

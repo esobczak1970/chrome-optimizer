@@ -9,14 +9,17 @@ import (
 	"github.com/esobczak1970/chrome-optimizer/browser"
 )
 
-func u(v uint64) *uint64   { return &v }
-func f(v float64) *float64 { return &v }
+//go:fix inline
+func u(v uint64) *uint64 { return new(v) }
+
+//go:fix inline
+func f(v float64) *float64 { return new(v) }
 
 func TestSortInfosUnknownAlwaysLast(t *testing.T) {
 	data := []browser.TabInfo{
-		{Tab: browser.Tab{TargetID: "unknown", Domain: "z.test"}},
-		{Tab: browser.Tab{TargetID: "low", Domain: "b.test"}, JSHeapUsedBytes: u(5), TaskDurationSeconds: f(1)},
-		{Tab: browser.Tab{TargetID: "high", Domain: "a.test"}, JSHeapUsedBytes: u(20), TaskDurationSeconds: f(3)},
+		{TargetID: "unknown", Domain: "z.test"},
+		{TargetID: "low", Domain: "b.test", JSHeapUsedBytes: new(uint64(5)), TaskDurationSeconds: new(float64(1))},
+		{TargetID: "high", Domain: "a.test", JSHeapUsedBytes: new(uint64(20)), TaskDurationSeconds: new(float64(3))},
 	}
 	for _, test := range []struct {
 		key  string
@@ -46,10 +49,10 @@ func TestActivitySortingAndTieBreak(t *testing.T) {
 	now := time.Date(2026, 10, 16, 18, 0, 0, 0, time.UTC)
 	then := now.Add(-time.Minute)
 	data := []browser.TabInfo{
-		{Tab: browser.Tab{TargetID: "c"}, ObservedTaskActivityAt: &now},
-		{Tab: browser.Tab{TargetID: "z"}},
-		{Tab: browser.Tab{TargetID: "b"}, ObservedTaskActivityAt: &then},
-		{Tab: browser.Tab{TargetID: "a"}, ObservedTaskActivityAt: &now},
+		{TargetID: "c", ObservedTaskActivityAt: &now},
+		{TargetID: "z"},
+		{TargetID: "b", ObservedTaskActivityAt: &then},
+		{TargetID: "a", ObservedTaskActivityAt: &now},
 	}
 	out := SortInfos(data, "activity", true)
 	for i, want := range []string{"a", "c", "b", "z"} {
@@ -61,12 +64,12 @@ func TestActivitySortingAndTieBreak(t *testing.T) {
 
 func TestRenderMetricsLabelsAndMissingValues(t *testing.T) {
 	tab := browser.TabInfo{
-		Tab:                 browser.Tab{TargetID: "a", Domain: "example.test", Title: "Hello\nWorld", URL: "https://example.test"},
-		JSHeapUsedBytes:     u(1048576),
-		TaskDurationSeconds: f(2.5),
+		TargetID: "a", Domain: "example.test", Title: "Hello\nWorld", URL: "https://example.test",
+		JSHeapUsedBytes:     new(uint64(1048576)),
+		TaskDurationSeconds: new(2.5),
 	}
 	missing := browser.TabInfo{
-		Tab:          browser.Tab{TargetID: "b", Domain: "chrome:", Title: "New Tab", URL: "chrome://newtab/"},
+		TargetID: "b", Domain: "chrome:", Title: "New Tab", URL: "chrome://newtab/",
 		MetricsError: "not supported",
 	}
 	var out bytes.Buffer

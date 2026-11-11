@@ -14,12 +14,10 @@ func TestRenderCompactTruncatesLongFieldsAndOmitsURL(t *testing.T) {
 	heap := uint64(2 * 1024 * 1024)
 	duration := 7.5
 	tab := browser.TabInfo{
-		Tab: browser.Tab{
-			TargetID: "0123456789ABCDEF9876543210ABCDEF",
-			Domain:   "verylongsubdomain.example.com",
-			Title:    "An extremely long news article title with 🎣 emoji and even more content",
-			URL:      "https://verylongsubdomain.example.com/private/path?token=never-echo-in-compact",
-		},
+		TargetID:               "0123456789ABCDEF9876543210ABCDEF",
+		Domain:                 "verylongsubdomain.example.com",
+		Title:                  "An extremely long news article title with 🎣 emoji and even more content",
+		URL:                    "https://verylongsubdomain.example.com/private/path?token=never-echo-in-compact",
 		JSHeapUsedBytes:        &heap,
 		TaskDurationSeconds:    &duration,
 		ObservedTaskActivityAt: &now,
@@ -46,9 +44,8 @@ func TestRenderCompactTruncatesLongFieldsAndOmitsURL(t *testing.T) {
 
 func TestRenderCompactMissingMetrics(t *testing.T) {
 	var output bytes.Buffer
-	if err := RenderMetricsCompact(&output, []browser.TabInfo{{Tab: browser.Tab{
-		TargetID: "A", Domain: "chrome:", Title: "New Tab", URL: "chrome://newtab/",
-	}}}, "memory", true); err != nil {
+	if err := RenderMetricsCompact(&output, []browser.TabInfo{{
+		TargetID: "A", Domain: "chrome:", Title: "New Tab", URL: "chrome://newtab/"}}, "memory", true); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(output.String(), "partial / unsupported") {
@@ -60,7 +57,7 @@ func TestRenderCompactShowsTinyNonzeroTaskDuration(t *testing.T) {
 	tiny := 0.000416
 	var output bytes.Buffer
 	tab := browser.TabInfo{
-		Tab:                 browser.Tab{TargetID: "test", Domain: "example.com"},
+		TargetID: "test", Domain: "example.com",
 		TaskDurationSeconds: &tiny,
 	}
 	if err := RenderMetricsCompact(&output, []browser.TabInfo{tab}, "cpu", true); err != nil {

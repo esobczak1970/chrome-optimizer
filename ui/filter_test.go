@@ -9,8 +9,8 @@ import (
 
 func TestFilterInfosMatchesTitleURLDomainAndID(t *testing.T) {
 	input := []browser.TabInfo{
-		{Tab: browser.Tab{TargetID: "A123", Domain: "example.com", Title: "Hello world", URL: "https://example.com"}},
-		{Tab: browser.Tab{TargetID: "B456", Domain: "news.test", Title: "Latest News", URL: "https://news.test/article/42"}},
+		{TargetID: "A123", Domain: "example.com", Title: "Hello world", URL: "https://example.com"},
+		{TargetID: "B456", Domain: "news.test", Title: "Latest News", URL: "https://news.test/article/42"},
 	}
 	for _, test := range []struct {
 		query string

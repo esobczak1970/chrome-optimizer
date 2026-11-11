@@ -10,7 +10,7 @@ import (
 
 func TestMetricStatusDistinguishesPartialFieldFailures(t *testing.T) {
 	info := browser.TabInfo{
-		Tab:               browser.Tab{TargetID: "a", Title: "Example", Domain: "example.test"},
+		TargetID: "a", Title: "Example", Domain: "example.test",
 		JSHeapError:       "JSHeapUsedSize invalid",
 		TaskDurationError: "TaskDuration missing",
 		MetricSource:      browser.MetricSourcePerformance,

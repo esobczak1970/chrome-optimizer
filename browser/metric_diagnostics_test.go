@@ -32,8 +32,8 @@ func TestParseMetricsDetailedDistinguishesUnavailableAndInvalid(t *testing.T) {
 				{Name: "JSHeapUsedSize", Value: 0},
 				{Name: "TaskDuration", Value: 0},
 			},
-			heap: metricHeap(0),
-			task: metricTask(0),
+			heap: new(uint64(0)),
+			task: new(float64(0)),
 		},
 		{
 			name: "unknown metrics do not create fake values",
@@ -68,7 +68,7 @@ func TestParseMetricsDetailedDistinguishesUnavailableAndInvalid(t *testing.T) {
 				{Name: "JSHeapUsedSize", Value: math.Exp2(64)},
 				{Name: "TaskDuration", Value: 12.5},
 			},
-			task:      metricTask(12.5),
+			task:      new(12.5),
 			heapError: "JSHeapUsedSize invalid",
 		},
 		{
@@ -79,8 +79,8 @@ func TestParseMetricsDetailedDistinguishesUnavailableAndInvalid(t *testing.T) {
 				{Name: "JSHeapUsedSize", Value: math.NaN()},
 				{Name: "TaskDuration", Value: -5},
 			},
-			heap: metricHeap(1048576),
-			task: metricTask(2),
+			heap: new(uint64(1048576)),
+			task: new(float64(2)),
 		},
 		{
 			name: "valid values recover after earlier invalid ones",
@@ -90,8 +90,8 @@ func TestParseMetricsDetailedDistinguishesUnavailableAndInvalid(t *testing.T) {
 				{Name: "JSHeapUsedSize", Value: 4096},
 				{Name: "TaskDuration", Value: 0.125},
 			},
-			heap: metricHeap(4096),
-			task: metricTask(0.125),
+			heap: new(uint64(4096)),
+			task: new(0.125),
 		},
 	}
 
@@ -114,11 +114,14 @@ func TestParseMetricsDetailedDistinguishesUnavailableAndInvalid(t *testing.T) {
 	}
 }
 
-func metricHeap(value uint64) *uint64   { return &value }
-func metricTask(value float64) *float64 { return &value }
+//go:fix inline
+func metricHeap(value uint64) *uint64 { return new(value) }
+
+//go:fix inline
+func metricTask(value float64) *float64 { return new(value) }
 
 func TestApplyPerformanceMetricsRetainsSourceAndPerFieldErrors(t *testing.T) {
-	info := TabInfo{Tab: Tab{TargetID: "tab-a", Title: "First"}}
+	info := TabInfo{TargetID: "tab-a", Title: "First"}
 	applyPerformanceMetrics(&info, []*performance.Metric{
 		{Name: "JSHeapUsedSize", Value: 8192},
 		{Name: "TaskDuration", Value: math.NaN()},
@@ -160,8 +163,8 @@ func TestCollectConcurrentLimitsWorkersAndPreservesTargetIdentity(t *testing.T) 
 		// still the source of each result's target identity and metadata.
 		time.Sleep(time.Duration(1+int(tab.TargetID[0])%5) * time.Millisecond)
 		return TabInfo{
-			Tab:             Tab{TargetID: "stale", Title: "after"},
-			JSHeapUsedBytes: metricHeap(uint64(tab.TargetID[0])),
+			TargetID: "stale", Title: "after",
+			JSHeapUsedBytes: new(uint64(tab.TargetID[0])),
 		}
 	})
 	if peak.Load() > maxConcurrentSamples {
@@ -178,18 +181,18 @@ func TestCollectConcurrentLimitsWorkersAndPreservesTargetIdentity(t *testing.T) 
 func TestObservedActivitySourceOnlyAppearsAfterValidCounterIncrease(t *testing.T) {
 	tracker := NewTaskActivityTracker()
 	start := time.Date(2026, time.November, 11, 12, 0, 0, 0, time.UTC)
-	first := []TabInfo{{Tab: Tab{TargetID: "a"}, TaskDurationSeconds: metricTask(1)}}
+	first := []TabInfo{{TargetID: "a", TaskDurationSeconds: new(float64(1))}}
 	tracker.Observe(first, start)
 	if first[0].ObservedTaskActivitySource != "" || first[0].ObservedTaskActivityAt != nil {
 		t.Fatal("first reading invented historical activity")
 	}
-	second := []TabInfo{{Tab: Tab{TargetID: "a"}, TaskDurationSeconds: metricTask(2)}}
+	second := []TabInfo{{TargetID: "a", TaskDurationSeconds: new(float64(2))}}
 	tracker.Observe(second, start.Add(time.Second))
 	if second[0].ObservedTaskActivityAt == nil ||
 		second[0].ObservedTaskActivitySource != ObservedTaskActivitySourceTaskDuration {
 		t.Fatalf("valid observed task increase needs source metadata: %+v", second[0])
 	}
-	failed := []TabInfo{{Tab: Tab{TargetID: "a"}, MetricsError: "target vanished"}}
+	failed := []TabInfo{{TargetID: "a", MetricsError: "target vanished"}}
 	tracker.Observe(failed, start.Add(2*time.Second))
 	if failed[0].ObservedTaskActivityAt != nil || failed[0].ObservedTaskActivitySource != "" {
 		t.Fatalf("failed sample retained stale activity provenance: %+v", failed[0])
@@ -240,7 +243,7 @@ func TestReadOneShotMetricsOrdersCommandsAndCleansUpFailures(t *testing.T) {
 					return nil
 				},
 			}
-			info := TabInfo{Tab: Tab{TargetID: "same-target"}}
+			info := TabInfo{TargetID: "same-target"}
 			err := readOneShotMetrics(context.Background(), &info, commands)
 			if got := strings.Join(operations, ","); got != tc.wantSequence {
 				t.Fatalf("Performance command sequence %q, want %q", got, tc.wantSequence)
