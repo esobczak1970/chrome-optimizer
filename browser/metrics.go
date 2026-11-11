@@ -24,9 +24,9 @@ type TabInfo struct {
 	TaskDurationSeconds *float64
 	// MetricSource is populated only after a successful CDP metric response.
 	// A missing metric is distinguished from an invalid one via field errors.
-	MetricSource       string
-	JSHeapError        string
-	TaskDurationError  string
+	MetricSource      string
+	JSHeapError       string
+	TaskDurationError string
 	// TaskDeltaSeconds is the measured increase in cumulative CDP task time.
 	// TaskSampleWindowSeconds is the elapsed interval between valid readings.
 	// Neither field represents CPU percentage or historical user activity.
@@ -44,7 +44,7 @@ type TabInfo struct {
 }
 
 const (
-	MetricSourcePerformance = "CDP Performance.getMetrics"
+	MetricSourcePerformance                = "CDP Performance.getMetrics"
 	ObservedTaskActivitySourceTaskDuration = "observed TaskDuration increase (not user interaction)"
 )
 
