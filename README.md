@@ -66,6 +66,7 @@ The debugging endpoint can control all tabs in that **debugging profile**. Never
 make help
 make doctor
 make deps
+make modernize-check
 make check
 make run-debug  # start/reuse isolated Chrome debugging profile
 make run        # attach only if Chrome CDP is already listening
@@ -74,6 +75,10 @@ go run . --config=config.yaml --sort=domain
 ```
 
 Config values live in `config.yaml` and use strict YAML (unknown keys and multiple YAML documents are rejected). Overrides: `--config`, `--endpoint`, `--sort=domain|title|id|memory|cpu|activity`. All HTTP discovery requests are local read-only GETs. CDP `Target.getTargets` is issued after attaching to an **existing** page; when no page exists, the application returns an empty list rather than opening a new tab.
+
+`make modernize-check` runs Go 1.27.4's `go fix -diff ./...` to report
+recommended source simplifications without modifying files. Review suggested
+changes before applying `go fix ./...`, then rerun `make check`.
 
 ## Tab metrics, sorting, and watch mode
 
