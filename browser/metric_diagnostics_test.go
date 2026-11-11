@@ -2,6 +2,8 @@ package browser
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"math"
 	"sync/atomic"
 	"testing"
@@ -191,5 +193,72 @@ func TestObservedActivitySourceOnlyAppearsAfterValidCounterIncrease(t *testing.T
 	tracker.Observe(failed, start.Add(2*time.Second))
 	if failed[0].ObservedTaskActivityAt != nil || failed[0].ObservedTaskActivitySource != "" {
 		t.Fatalf("failed sample retained stale activity provenance: %+v", failed[0])
+	}
+}
+
+func TestReadOneShotMetricsOrdersCommandsAndCleansUpFailures(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		enableError  error
+		readError    error
+		wantSequence string
+		wantError    error
+	}{
+		{name: "success", wantSequence: "enable,get,disable"},
+		{
+			name: "enable failed",
+			enableError: errors.New("cannot enable"),
+			wantSequence: "enable",
+			wantError: errors.New("cannot enable"),
+		},
+		{
+			name: "read failed",
+			readError: errors.New("page closed"),
+			wantSequence: "enable,get,disable",
+			wantError: errors.New("page closed"),
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var operations []string
+			commands := performanceCommands{
+				enable: func(context.Context) error {
+					operations = append(operations, "enable")
+					return tc.enableError
+				},
+				read: func(context.Context) ([]*performance.Metric, error) {
+					operations = append(operations, "get")
+					if tc.readError != nil {
+						return nil, tc.readError
+					}
+					return []*performance.Metric{
+						{Name: "JSHeapUsedSize", Value: 1048576},
+						{Name: "TaskDuration", Value: 0},
+					}, nil
+				},
+				disable: func(context.Context) error {
+					operations = append(operations, "disable")
+					return nil
+				},
+			}
+			info := TabInfo{Tab: Tab{TargetID: "same-target"}}
+			err := readOneShotMetrics(context.Background(), &info, commands)
+			if got := strings.Join(operations, ","); got != tc.wantSequence {
+				t.Fatalf("Performance command sequence %q, want %q", got, tc.wantSequence)
+			}
+			if tc.wantError != nil {
+				if err == nil || !strings.Contains(err.Error(), tc.wantError.Error()) {
+					t.Fatalf("expected wrapped %q error, got %v", tc.wantError, err)
+				}
+				if info.MetricSource != "" || info.JSHeapUsedBytes != nil {
+					t.Fatalf("failed capture fabricated readings: %+v", info)
+				}
+				return
+			}
+			if err != nil || info.MetricSource != MetricSourcePerformance || info.SampledAt.IsZero() ||
+				info.JSHeapUsedBytes == nil || *info.JSHeapUsedBytes != 1048576 ||
+				info.TaskDurationSeconds == nil || *info.TaskDurationSeconds != 0 {
+				t.Fatalf("successful capture lost source or valid zero: %+v; err %v", info, err)
+			}
+		})
 	}
 }
