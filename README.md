@@ -129,6 +129,17 @@ with permitted values from 1s to 1m.
   CPU utilization, physical memory, tab focus, or proof of user interaction.
   The default terminal view still shows cumulative task time, not these deltas.
 
+Each successful `Performance.getMetrics` response records its source as
+`browser.MetricSourcePerformance` on `TabInfo.MetricSource`. The per-field
+`JSHeapError` and `TaskDurationError` distinguish **missing** CDP metric
+names from **invalid** values (negative, non-finite, fractional heap bytes,
+or overflow). A valid zero is still a measured zero. The terminal STATUS
+column retains `partial / unsupported` but now includes field-specific
+reasons when available; transport/attachment errors remain in `MetricsError`.
+An observed task increase carries
+`ObservedTaskActivitySourceTaskDuration`; it is not a last-access timestamp.
+No metric is silently substituted with OS-wide CPU or Chrome process RSS.
+
 The implementation does not persist URLs, titles, metrics, or browsing history
 to disk. Closing or restarting the CLI resets its in-memory observations.
 Persistent watch target contexts always detach without closing user tabs.
