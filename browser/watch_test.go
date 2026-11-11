@@ -13,8 +13,7 @@ import (
 )
 
 func TestWatchSamplerRetainsEpochAndReconcilesTargets(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	w := newWatchSampler(ctx, time.Second)
 	defer w.close()
 	samples := make(map[string]int)
@@ -27,7 +26,7 @@ func TestWatchSamplerRetainsEpochAndReconcilesTargets(t *testing.T) {
 		return TabInfo{
 			Tab:                 tab,
 			MetricSessionEpoch:  session.epoch,
-			TaskDurationSeconds: floatPtr(float64(count)),
+			TaskDurationSeconds: new(float64(count)),
 		}
 	}
 	tabs := []Tab{{TargetID: "A", Title: "First"}, {TargetID: "B", Title: "Second"}}
