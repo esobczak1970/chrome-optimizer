@@ -18,8 +18,8 @@ func f(v float64) *float64 { return new(v) }
 func TestSortInfosUnknownAlwaysLast(t *testing.T) {
 	data := []browser.TabInfo{
 		{TargetID: "unknown", Domain: "z.test"},
-		{TargetID: "low", Domain: "b.test", JSHeapUsedBytes: u(5), TaskDurationSeconds: f(1)},
-		{TargetID: "high", Domain: "a.test", JSHeapUsedBytes: u(20), TaskDurationSeconds: f(3)},
+		{TargetID: "low", Domain: "b.test", JSHeapUsedBytes: new(uint64(5)), TaskDurationSeconds: new(float64(1))},
+		{TargetID: "high", Domain: "a.test", JSHeapUsedBytes: new(uint64(20)), TaskDurationSeconds: new(float64(3))},
 	}
 	for _, test := range []struct {
 		key  string
@@ -65,7 +65,7 @@ func TestActivitySortingAndTieBreak(t *testing.T) {
 func TestRenderMetricsLabelsAndMissingValues(t *testing.T) {
 	tab := browser.TabInfo{
 		TargetID: "a", Domain: "example.test", Title: "Hello\nWorld", URL: "https://example.test",
-		JSHeapUsedBytes:     u(1048576),
+		JSHeapUsedBytes:     new(uint64(1048576)),
 		TaskDurationSeconds: new(2.5),
 	}
 	missing := browser.TabInfo{
