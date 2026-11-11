@@ -49,7 +49,7 @@ func TestCollectConcurrentPreservesTargetIdentityAndOrder(t *testing.T) {
 		if tab.TargetID == "b" {
 			return TabInfo{MetricsError: errors.New("target vanished").Error()}
 		}
-		return TabInfo{JSHeapUsedBytes: uintPtr(20)}
+		return TabInfo{JSHeapUsedBytes: new(uint64(20))}
 	})
 	if len(out) != len(tabs) {
 		t.Fatalf("expected %d results, got %d", len(tabs), len(out))
@@ -86,22 +86,22 @@ func TestCollectConcurrentCanceledWithoutRunningSampler(t *testing.T) {
 func TestTaskActivityTracker(t *testing.T) {
 	tracker := NewTaskActivityTracker()
 	now := time.Date(2026, 10, 16, 20, 0, 0, 0, time.UTC)
-	sample := []TabInfo{{TargetID: "a", TaskDurationSeconds: floatPtr(10)}}
+	sample := []TabInfo{{TargetID: "a", TaskDurationSeconds: new(float64(10))}}
 	tracker.Observe(sample, now)
 	if sample[0].ObservedTaskActivityAt != nil {
 		t.Fatal("first measurement is not evidence of a user action")
 	}
-	sample = []TabInfo{{TargetID: "a", TaskDurationSeconds: floatPtr(10)}}
+	sample = []TabInfo{{TargetID: "a", TaskDurationSeconds: new(float64(10))}}
 	tracker.Observe(sample, now.Add(time.Second))
 	if sample[0].ObservedTaskActivityAt != nil {
 		t.Fatal("unchanged counter is not activity")
 	}
-	sample = []TabInfo{{TargetID: "a", TaskDurationSeconds: floatPtr(11)}}
+	sample = []TabInfo{{TargetID: "a", TaskDurationSeconds: new(float64(11))}}
 	tracker.Observe(sample, now.Add(2*time.Second))
 	if sample[0].ObservedTaskActivityAt == nil || !sample[0].ObservedTaskActivityAt.Equal(now.Add(2*time.Second)) {
 		t.Fatalf("expected observed execution timestamp: %+v", sample)
 	}
-	sample = []TabInfo{{TargetID: "a", TaskDurationSeconds: floatPtr(1)}}
+	sample = []TabInfo{{TargetID: "a", TaskDurationSeconds: new(float64(1))}}
 	tracker.Observe(sample, now.Add(3*time.Second))
 	if sample[0].ObservedTaskActivityAt != nil {
 		t.Fatal("counter reset must clear stale activity")
@@ -115,9 +115,9 @@ func TestTaskActivityTracker(t *testing.T) {
 func TestMissingMetricsResetComparisonBaseline(t *testing.T) {
 	tracker := NewTaskActivityTracker()
 	now := time.Now()
-	tracker.Observe([]TabInfo{{TargetID: "x", TaskDurationSeconds: floatPtr(2)}}, now)
+	tracker.Observe([]TabInfo{{TargetID: "x", TaskDurationSeconds: new(float64(2))}}, now)
 	tracker.Observe([]TabInfo{{TargetID: "x"}}, now.Add(time.Second))
-	sample := []TabInfo{{TargetID: "x", TaskDurationSeconds: floatPtr(4)}}
+	sample := []TabInfo{{TargetID: "x", TaskDurationSeconds: new(float64(4))}}
 	tracker.Observe(sample, now.Add(2*time.Second))
 	if sample[0].ObservedTaskActivityAt != nil {
 		t.Fatal("a failed intermediate sample must not create invented activity")
@@ -237,14 +237,14 @@ func TestTaskActivityTrackerRejectsInvalidCountersAndFailedSamples(t *testing.T)
 		{name: "not-a-number", task: new(math.NaN())},
 		{name: "infinite", task: new(math.Inf(1))},
 		{name: "negative", task: new(-0.1)},
-		{name: "failed-reading", task: floatPtr(100), err: "target detached"},
+		{name: "failed-reading", task: new(float64(100)), err: "target detached"},
 	}
 	base := time.Date(2026, 10, 23, 16, 0, 0, 0, time.UTC)
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			tracker := NewTaskActivityTracker()
-			tracker.Observe([]TabInfo{{TargetID: "a", TaskDurationSeconds: floatPtr(1)}}, base)
-			increase := []TabInfo{{TargetID: "a", TaskDurationSeconds: floatPtr(2)}}
+			tracker.Observe([]TabInfo{{TargetID: "a", TaskDurationSeconds: new(float64(1))}}, base)
+			increase := []TabInfo{{TargetID: "a", TaskDurationSeconds: new(float64(2))}}
 			tracker.Observe(increase, base.Add(time.Second))
 			if increase[0].ObservedTaskActivityAt == nil {
 				t.Fatal("expected initial valid activity")
@@ -258,7 +258,7 @@ func TestTaskActivityTrackerRejectsInvalidCountersAndFailedSamples(t *testing.T)
 				bad[0].ObservedTaskActivityAt != nil {
 				t.Fatalf("bad sample must not retain activity or delta: %+v", bad[0])
 			}
-			next := []TabInfo{{TargetID: "a", TaskDurationSeconds: floatPtr(9)}}
+			next := []TabInfo{{TargetID: "a", TaskDurationSeconds: new(float64(9))}}
 			tracker.Observe(next, base.Add(3*time.Second))
 			if next[0].TaskDeltaSeconds != nil || next[0].ObservedTaskActivityAt != nil {
 				t.Fatal("reading after invalid sample must be a fresh baseline")
