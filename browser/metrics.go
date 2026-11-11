@@ -22,18 +22,31 @@ type TabInfo struct {
 	Tab
 	JSHeapUsedBytes     *uint64
 	TaskDurationSeconds *float64
+	// MetricSource is populated only after a successful CDP metric response.
+	// A missing metric is distinguished from an invalid one via field errors.
+	MetricSource       string
+	JSHeapError        string
+	TaskDurationError  string
 	// TaskDeltaSeconds is the measured increase in cumulative CDP task time.
 	// TaskSampleWindowSeconds is the elapsed interval between valid readings.
 	// Neither field represents CPU percentage or historical user activity.
 	TaskDeltaSeconds        *float64
 	TaskSampleWindowSeconds *float64
 	ObservedTaskActivityAt  *time.Time
+	// This source is known only after observing a valid task-counter increase.
+	// It must never be described as historical tab access or user interaction.
+	ObservedTaskActivitySource string
 	// MetricSessionEpoch is nonzero for a persistent watch attachment.
 	// A changed epoch invalidates TaskDuration comparisons after reattach.
 	MetricSessionEpoch uint64
 	SampledAt          time.Time
 	MetricsError       string
 }
+
+const (
+	MetricSourcePerformance = "CDP Performance.getMetrics"
+	ObservedTaskActivitySourceTaskDuration = "observed TaskDuration increase (not user interaction)"
+)
 
 // Collect attaches to an existing browser and samples its existing page
 // targets. The shared parent holds one WebSocket connection; child contexts
@@ -123,7 +136,7 @@ func sampleTarget(ctx, parent context.Context, tab Tab) TabInfo {
 		if err != nil {
 			return fmt.Errorf("Performance.getMetrics: %w", err)
 		}
-		result.JSHeapUsedBytes, result.TaskDurationSeconds = parseMetrics(metrics.Metrics)
+		applyPerformanceMetrics(&result, metrics.Metrics)
 		result.SampledAt = time.Now()
 		return nil
 	}))
@@ -133,29 +146,69 @@ func sampleTarget(ctx, parent context.Context, tab Tab) TabInfo {
 	return result
 }
 
-// parseMetrics extracts two explicitly named measurements. A missing metric
-// is nil rather than zero. Reject NaN, Inf, negative counters and overflow;
-// bogus values should never influence sorting or a future throttle decision.
-func parseMetrics(metrics []*performance.Metric) (*uint64, *float64) {
-	var heap *uint64
-	var task *float64
+// metricReadings keeps missing and malformed CDP measurements distinct without
+// assuming that every page target supports both Performance metrics.
+type metricReadings struct {
+	heap      *uint64
+	task      *float64
+	heapError string
+	taskError string
+}
+
+// parseMetricsDetailed accepts only finite, nonnegative values. Heap readings
+// are byte counts and must be integral and representable as uint64. Invalid
+// duplicates cannot overwrite a valid metric encountered earlier in the same
+// response; missing values never become zero.
+func parseMetricsDetailed(metrics []*performance.Metric) metricReadings {
+	out := metricReadings{
+		heapError: "JSHeapUsedSize missing",
+		taskError: "TaskDuration missing",
+	}
 	for _, m := range metrics {
-		if m == nil || math.IsNaN(m.Value) || math.IsInf(m.Value, 0) || m.Value < 0 {
+		if m == nil {
 			continue
 		}
 		switch m.Name {
 		case "JSHeapUsedSize":
-			if m.Value >= math.Exp2(64) {
+			if math.IsNaN(m.Value) || math.IsInf(m.Value, 0) || m.Value < 0 ||
+				m.Value >= math.Exp2(64) || math.Trunc(m.Value) != m.Value {
+				if out.heap == nil {
+					out.heapError = "JSHeapUsedSize invalid"
+				}
 				continue
 			}
 			value := uint64(m.Value)
-			heap = &value
+			out.heap = &value
+			out.heapError = ""
 		case "TaskDuration":
+			if math.IsNaN(m.Value) || math.IsInf(m.Value, 0) || m.Value < 0 {
+				if out.task == nil {
+					out.taskError = "TaskDuration invalid"
+				}
+				continue
+			}
 			value := m.Value
-			task = &value
+			out.task = &value
+			out.taskError = ""
 		}
 	}
-	return heap, task
+	return out
+}
+
+// parseMetrics retains the original two-value helper for existing clients and
+// tests; live sampling uses the detailed diagnostics below.
+func parseMetrics(metrics []*performance.Metric) (*uint64, *float64) {
+	readings := parseMetricsDetailed(metrics)
+	return readings.heap, readings.task
+}
+
+func applyPerformanceMetrics(info *TabInfo, metrics []*performance.Metric) {
+	readings := parseMetricsDetailed(metrics)
+	info.JSHeapUsedBytes = readings.heap
+	info.TaskDurationSeconds = readings.task
+	info.JSHeapError = readings.heapError
+	info.TaskDurationError = readings.taskError
+	info.MetricSource = MetricSourcePerformance
 }
 
 // TaskActivityTracker remembers the last observed positive TaskDuration delta.
@@ -192,6 +245,7 @@ func (a *TaskActivityTracker) Observe(infos []TabInfo, now time.Time) {
 		id := info.TargetID
 		seen[id] = true
 		info.ObservedTaskActivityAt = nil
+		info.ObservedTaskActivitySource = ""
 		info.TaskDeltaSeconds = nil
 		info.TaskSampleWindowSeconds = nil
 
@@ -232,6 +286,7 @@ func (a *TaskActivityTracker) Observe(infos []TabInfo, now time.Time) {
 		if t, ok := a.last[id]; ok {
 			copy := t
 			info.ObservedTaskActivityAt = &copy
+			info.ObservedTaskActivitySource = ObservedTaskActivitySourceTaskDuration
 		}
 	}
 	for id := range a.previous {
