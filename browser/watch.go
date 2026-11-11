@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/chromedp/cdproto/cdp"
-	"github.com/chromedp/cdproto/performance"
 	"github.com/chromedp/cdproto/target"
 	"github.com/chromedp/chromedp"
 )
@@ -48,17 +46,18 @@ func (s *watchedTarget) sample(tab Tab, timeout time.Duration) TabInfo {
 	err := chromedp.Do(s.ctx, chromedp.Func(func(runCtx context.Context, current *chromedp.Target) error {
 		commandCtx, done := context.WithTimeout(runCtx, timeout)
 		defer done()
+		commands := newPerformanceCommands(current)
 		if !s.enabled {
-			if _, err := cdp.Call(commandCtx, current, performance.Enable, performance.EnableParams{}); err != nil {
+			if err := commands.enable(commandCtx); err != nil {
 				return fmt.Errorf("Performance.enable: %w", err)
 			}
 			s.enabled = true
 		}
-		values, err := cdp.Call(commandCtx, current, performance.GetMetrics, cdp.Empty{})
+		metrics, err := commands.read(commandCtx)
 		if err != nil {
 			return fmt.Errorf("Performance.getMetrics: %w", err)
 		}
-		result.JSHeapUsedBytes, result.TaskDurationSeconds = parseMetrics(values.Metrics)
+		applyPerformanceMetrics(&result, metrics)
 		result.SampledAt = time.Now()
 		return nil
 	}))

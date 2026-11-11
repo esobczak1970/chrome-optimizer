@@ -140,13 +140,30 @@ func terminalValues(tab browser.TabInfo) (heap, task, activity, status string) {
 	if tab.ObservedTaskActivityAt != nil {
 		activity = tab.ObservedTaskActivityAt.Local().Format("15:04:05")
 	}
-	status = "OK"
-	if tab.MetricsError != "" {
-		status = tab.MetricsError
-	} else if tab.JSHeapUsedBytes == nil || !validTaskDuration(tab.TaskDurationSeconds) {
-		status = "partial / unsupported"
-	}
+	status = metricStatus(tab)
 	return
+}
+
+// metricStatus is shared by compact, full, and width-aware renderers so that
+// missing and invalid metrics have the same diagnostic meaning everywhere.
+func metricStatus(tab browser.TabInfo) string {
+	if tab.MetricsError != "" {
+		return tab.MetricsError
+	}
+	var problems []string
+	if tab.JSHeapError != "" {
+		problems = append(problems, tab.JSHeapError)
+	}
+	if tab.TaskDurationError != "" {
+		problems = append(problems, tab.TaskDurationError)
+	}
+	if len(problems) != 0 {
+		return "partial / unsupported: " + strings.Join(problems, "; ")
+	}
+	if tab.JSHeapUsedBytes == nil || !validTaskDuration(tab.TaskDurationSeconds) {
+		return "partial / unsupported"
+	}
+	return "OK"
 }
 
 // runeColumns estimates common terminal cell widths for CJK text and emoji.
