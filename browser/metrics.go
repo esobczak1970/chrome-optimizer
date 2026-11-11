@@ -77,16 +77,11 @@ func collectConcurrent(ctx context.Context, tabs []Tab, sample func(context.Cont
 		return out
 	}
 
-	workers := len(tabs)
-	if workers > maxConcurrentSamples {
-		workers = maxConcurrentSamples
-	}
+	workers := min(len(tabs), maxConcurrentSamples)
 	jobs := make(chan int)
 	var wg sync.WaitGroup
 	for range workers {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			for i := range jobs {
 				if ctx.Err() != nil {
 					continue
@@ -97,7 +92,7 @@ func collectConcurrent(ctx context.Context, tabs []Tab, sample func(context.Cont
 				info.Tab = tabs[i]
 				out[i] = info
 			}
-		}()
+		})
 	}
 send:
 	for i := range tabs {
