@@ -18,12 +18,12 @@ func TestSortInfosInvalidTaskDurationsAlwaysLast(t *testing.T) {
 	negative := -1.0
 
 	infos := []browser.TabInfo{
-		{Tab: browser.Tab{TargetID: "nan"}, TaskDurationSeconds: &nan},
-		{Tab: browser.Tab{TargetID: "high"}, TaskDurationSeconds: &high},
-		{Tab: browser.Tab{TargetID: "missing"}},
-		{Tab: browser.Tab{TargetID: "zero"}, TaskDurationSeconds: &zero},
-		{Tab: browser.Tab{TargetID: "infinite"}, TaskDurationSeconds: &infinite},
-		{Tab: browser.Tab{TargetID: "negative"}, TaskDurationSeconds: &negative},
+		{TargetID: "nan", TaskDurationSeconds: &nan},
+		{TargetID: "high", TaskDurationSeconds: &high},
+		{TargetID: "missing"},
+		{TargetID: "zero", TaskDurationSeconds: &zero},
+		{TargetID: "infinite", TaskDurationSeconds: &infinite},
+		{TargetID: "negative", TaskDurationSeconds: &negative},
 	}
 
 	for _, tc := range []struct {
@@ -51,11 +51,9 @@ func TestSortInfosInvalidTaskDurationsAlwaysLast(t *testing.T) {
 func TestRenderMetricsInvalidDurationAndUnicodeControl(t *testing.T) {
 	bad := math.NaN()
 	info := browser.TabInfo{
-		Tab: browser.Tab{
-			TargetID: "id",
-			Domain:   "example.com",
-			Title:    "trusted\u202eevil\u202c title",
-		},
+		TargetID:            "id",
+		Domain:              "example.com",
+		Title:               "trusted\u202eevil\u202c title",
 		TaskDurationSeconds: &bad,
 	}
 	for _, render := range []struct {
