@@ -3,8 +3,8 @@ package browser
 import (
 	"context"
 	"errors"
-	"strings"
 	"math"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
