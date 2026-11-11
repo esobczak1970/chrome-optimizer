@@ -123,27 +123,58 @@ func sampleTarget(ctx, parent context.Context, tab Tab) TabInfo {
 	defer cancel()
 
 	err := chromedp.Do(tabCtx, chromedp.Func(func(commandCtx context.Context, session *chromedp.Target) error {
-		if _, err := cdp.Call(commandCtx, session, performance.Enable, performance.EnableParams{}); err != nil {
-			return fmt.Errorf("Performance.enable: %w", err)
-		}
-		defer func() {
-			// Disable metric collection before detaching the session. If
-			// the target closed or the context expired, detaching still
-			// cleans up the subscription.
-			_, _ = cdp.Call(commandCtx, session, performance.Disable, cdp.Empty{})
-		}()
-		metrics, err := cdp.Call(commandCtx, session, performance.GetMetrics, cdp.Empty{})
-		if err != nil {
-			return fmt.Errorf("Performance.getMetrics: %w", err)
-		}
-		applyPerformanceMetrics(&result, metrics.Metrics)
-		result.SampledAt = time.Now()
-		return nil
+		return readOneShotMetrics(commandCtx, &result, newPerformanceCommands(session))
 	}))
 	if err != nil {
 		result.MetricsError = err.Error()
 	}
 	return result
+}
+
+// performanceCommands binds enable/read/disable to one exact target session.
+// A tiny command adapter makes ordering and failure cleanup testable without
+// opening real Chrome or weakening the detach-only target lifecycle.
+type performanceCommands struct {
+	enable  func(context.Context) error
+	read    func(context.Context) ([]*performance.Metric, error)
+	disable func(context.Context) error
+}
+
+func newPerformanceCommands(session *chromedp.Target) performanceCommands {
+	return performanceCommands{
+		enable: func(ctx context.Context) error {
+			_, err := cdp.Call(ctx, session, performance.Enable, performance.EnableParams{})
+			return err
+		},
+		read: func(ctx context.Context) ([]*performance.Metric, error) {
+			response, err := cdp.Call(ctx, session, performance.GetMetrics, cdp.Empty{})
+			if err != nil {
+				return nil, err
+			}
+			return response.Metrics, nil
+		},
+		disable: func(ctx context.Context) error {
+			_, err := cdp.Call(ctx, session, performance.Disable, cdp.Empty{})
+			return err
+		},
+	}
+}
+
+// readOneShotMetrics always attempts to disable successful instrumentation,
+// including after a failed get. Cancellation still detaches the target context
+// if the protocol can no longer accept a disable command.
+func readOneShotMetrics(ctx context.Context, info *TabInfo, commands performanceCommands) error {
+	if err := commands.enable(ctx); err != nil {
+		return fmt.Errorf("Performance.enable: %w", err)
+	}
+	defer func() { _ = commands.disable(ctx) }()
+	metrics, err := commands.read(ctx)
+	if err != nil {
+		return fmt.Errorf("Performance.getMetrics: %w", err)
+	}
+	applyPerformanceMetrics(info, metrics)
+	info.SampledAt = time.Now()
+	return nil
 }
 
 // metricReadings keeps missing and malformed CDP measurements distinct without
