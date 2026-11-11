@@ -62,7 +62,7 @@ func TestWatchSamplerFailureTriggersFreshEpoch(t *testing.T) {
 	defer w.close()
 	fail := false
 	w.sampler = func(s *watchedTarget, tab Tab, _ time.Duration) TabInfo {
-		info := TabInfo{Tab: tab, MetricSessionEpoch: s.epoch, TaskDurationSeconds: floatPtr(1)}
+		info := TabInfo{Tab: tab, MetricSessionEpoch: s.epoch, TaskDurationSeconds: new(float64(1))}
 		if fail {
 			info.MetricsError = "page target vanished"
 		}
@@ -86,7 +86,7 @@ func TestWatchSamplerLimitsPersistentSessions(t *testing.T) {
 	w := newWatchSampler(context.Background(), time.Second)
 	defer w.close()
 	w.sampler = func(s *watchedTarget, tab Tab, _ time.Duration) TabInfo {
-		return TabInfo{Tab: tab, MetricSessionEpoch: s.epoch, TaskDurationSeconds: floatPtr(1)}
+		return TabInfo{Tab: tab, MetricSessionEpoch: s.epoch, TaskDurationSeconds: new(float64(1))}
 	}
 	var tabs []Tab
 	for i := range maxWatchSessions + 1 {
