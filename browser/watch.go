@@ -58,7 +58,7 @@ func (s *watchedTarget) sample(tab Tab, timeout time.Duration) TabInfo {
 		if err != nil {
 			return fmt.Errorf("Performance.getMetrics: %w", err)
 		}
-		result.JSHeapUsedBytes, result.TaskDurationSeconds = parseMetrics(values.Metrics)
+		applyPerformanceMetrics(&result, values.Metrics)
 		result.SampledAt = time.Now()
 		return nil
 	}))
