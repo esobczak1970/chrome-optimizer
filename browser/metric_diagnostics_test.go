@@ -32,8 +32,8 @@ func TestParseMetricsDetailedDistinguishesUnavailableAndInvalid(t *testing.T) {
 				{Name: "JSHeapUsedSize", Value: 0},
 				{Name: "TaskDuration", Value: 0},
 			},
-			heap: metricHeap(0),
-			task: metricTask(0),
+			heap: new(uint64(0)),
+			task: new(float64(0)),
 		},
 		{
 			name: "unknown metrics do not create fake values",
@@ -79,8 +79,8 @@ func TestParseMetricsDetailedDistinguishesUnavailableAndInvalid(t *testing.T) {
 				{Name: "JSHeapUsedSize", Value: math.NaN()},
 				{Name: "TaskDuration", Value: -5},
 			},
-			heap: metricHeap(1048576),
-			task: metricTask(2),
+			heap: new(uint64(1048576)),
+			task: new(float64(2)),
 		},
 		{
 			name: "valid values recover after earlier invalid ones",
@@ -90,7 +90,7 @@ func TestParseMetricsDetailedDistinguishesUnavailableAndInvalid(t *testing.T) {
 				{Name: "JSHeapUsedSize", Value: 4096},
 				{Name: "TaskDuration", Value: 0.125},
 			},
-			heap: metricHeap(4096),
+			heap: new(uint64(4096)),
 			task: new(0.125),
 		},
 	}
@@ -181,12 +181,12 @@ func TestCollectConcurrentLimitsWorkersAndPreservesTargetIdentity(t *testing.T) 
 func TestObservedActivitySourceOnlyAppearsAfterValidCounterIncrease(t *testing.T) {
 	tracker := NewTaskActivityTracker()
 	start := time.Date(2026, time.November, 11, 12, 0, 0, 0, time.UTC)
-	first := []TabInfo{{TargetID: "a", TaskDurationSeconds: metricTask(1)}}
+	first := []TabInfo{{TargetID: "a", TaskDurationSeconds: new(float64(1))}}
 	tracker.Observe(first, start)
 	if first[0].ObservedTaskActivitySource != "" || first[0].ObservedTaskActivityAt != nil {
 		t.Fatal("first reading invented historical activity")
 	}
-	second := []TabInfo{{TargetID: "a", TaskDurationSeconds: metricTask(2)}}
+	second := []TabInfo{{TargetID: "a", TaskDurationSeconds: new(float64(2))}}
 	tracker.Observe(second, start.Add(time.Second))
 	if second[0].ObservedTaskActivityAt == nil ||
 		second[0].ObservedTaskActivitySource != ObservedTaskActivitySourceTaskDuration {
