@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -38,11 +39,16 @@ func Default() Config {
 // all values before any browser connection is attempted.
 func Load(path string) (Config, error) {
 	cfg := Default()
-	f, err := os.Open(path)
+	root, err := os.OpenRoot(filepath.Dir(path))
+	if err != nil {
+		return Config{}, fmt.Errorf("open YAML configuration directory: %w", err)
+	}
+	defer func() { _ = root.Close() }()
+	f, err := root.Open(filepath.Base(path))
 	if err != nil {
 		return Config{}, fmt.Errorf("open YAML configuration %q: %w", path, err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	decoder := yaml.NewDecoder(f)
 	decoder.KnownFields(true)
