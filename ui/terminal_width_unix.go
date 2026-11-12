@@ -17,6 +17,8 @@ func terminalColumns(w io.Writer) int {
 		return 0
 	}
 	var size struct{ rows, cols, x, y uint16 }
+	// #nosec G103 -- ioctl TIOCGWINSZ requires an OS ABI pointer to this
+	// fixed-size stack-allocated winsize value; no untrusted pointers are used.
 	_, _, errno := syscall.Syscall(syscall.SYS_IOCTL, f.Fd(), uintptr(syscall.TIOCGWINSZ), uintptr(unsafe.Pointer(&size)))
 	if errno != 0 || size.cols == 0 {
 		return 0
