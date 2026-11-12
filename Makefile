@@ -29,6 +29,14 @@ help:
 	  '  make chrome-start  Start a separate Chrome debugging profile (macOS)' \
 	  '  make run-debug     Start/reuse the separate Chrome profile and discover its tabs' \
 	  '  make test-shell    Test Chrome launch safeguards without real Chrome'
+	@printf '%s\n' \
+	  '  Additional Make targets:' \
+	  '  make help                   - Display available Make targets.' \
+	  '  make tidy                   - Normalize Go module files (modifies files).' \
+	  '  make format                 - Apply gofmt to Go sources (modifies files).' \
+	  '  make vet                    - Run go vet on all packages.' \
+	  '  make clean                  - Remove generated CLI binary artifacts.' \
+	  '  make go-version-check       - Check the pinned Go version/module contract.'
 
 doctor:
 	@command -v "$(GO)" >/dev/null || { echo "Go must be installed" >&2; exit 1; }
