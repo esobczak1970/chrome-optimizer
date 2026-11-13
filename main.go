@@ -164,7 +164,6 @@ func run(ctx context.Context, args []string, out, errOut io.Writer) error {
 	return renderSample(tabs)
 }
 
-
 // renderWatchSample suppresses identical frames without stopping sampling or
 // changing the ordinary read-only one-shot output. The snapshot includes
 // terminal-width-aware formatting: a resize changes the visible frame.
