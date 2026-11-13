@@ -131,10 +131,14 @@ func run(ctx context.Context, args []string, out, errOut io.Writer) error {
 	}
 	tracker := browser.NewTaskActivityTracker()
 	noMatchesReported := false
+	lastWatchSnapshot := ""
 	renderSample := func(tabs []browser.TabInfo) error {
 		tracker.Observe(tabs, time.Now())
 		tabs = ui.FilterInfos(tabs, *filter)
 		if strings.TrimSpace(*filter) != "" && len(tabs) == 0 {
+			// A later matching tab must print again, even if it matches a
+			// previous snapshot from before the no-match transition.
+			lastWatchSnapshot = ""
 			if *watch && noMatchesReported {
 				return nil
 			}
@@ -144,9 +148,7 @@ func run(ctx context.Context, args []string, out, errOut io.Writer) error {
 		}
 		noMatchesReported = false
 		if *watch {
-			if err := ui.RenderWatchHeader(out, time.Now(), len(tabs)); err != nil {
-				return err
-			}
+			return renderWatchSample(out, tabs, cfg.DefaultSort, useDesc, useCompact, &lastWatchSnapshot)
 		}
 		return ui.RenderMetricsAuto(out, tabs, cfg.DefaultSort, useDesc, useCompact)
 	}
@@ -160,6 +162,28 @@ func run(ctx context.Context, args []string, out, errOut io.Writer) error {
 		return err
 	}
 	return renderSample(tabs)
+}
+
+
+// renderWatchSample suppresses identical frames without stopping sampling or
+// changing the ordinary read-only one-shot output. The snapshot includes
+// terminal-width-aware formatting: a resize changes the visible frame.
+func renderWatchSample(out io.Writer, tabs []browser.TabInfo, sortKey string, desc, compact bool, previous *string) error {
+	snapshot, err := ui.RenderMetricsSnapshot(out, tabs, sortKey, desc, compact)
+	if err != nil {
+		return err
+	}
+	if snapshot == *previous {
+		return nil
+	}
+	if err := ui.RenderWatchHeader(out, time.Now(), len(tabs)); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(out, snapshot); err != nil {
+		return err
+	}
+	*previous = snapshot
+	return nil
 }
 
 // Explicit boolean flags override YAML even when their value is false.
