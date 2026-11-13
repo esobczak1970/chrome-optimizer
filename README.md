@@ -149,6 +149,15 @@ The implementation does not persist URLs, titles, metrics, or browsing history
 to disk. Closing or restarting the CLI resets its in-memory observations.
 Persistent watch target contexts always detach without closing user tabs.
 Consecutive no-match messages are suppressed until matching tabs reappear.
+In `--watch` mode, Chrome Optimizer continues sampling at the configured
+`--interval` but only repaints when the **formatted visible tab report**
+actually changes. Rounded metric changes that would display identically do not
+spam the terminal. Tab changes and terminal-width changes trigger a fresh frame;
+a filter returning no results reports that transition once, then resumes when
+tabs reappear. Because a stable report no longer prints a timestamp on every
+tick, silence between updates does **not** mean monitoring has stopped.
+Redirected one-shot output remains unchanged. Use Ctrl+C to exit watch mode.
+
 
 **Live testing:** On a real macOS Chrome debugging session, open at least
 two ordinary web pages, run the metrics/sorting commands above, verify that
