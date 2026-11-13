@@ -13,7 +13,22 @@ import (
 // RenderMetricsAuto uses the current terminal width on every call (including
 // watch refreshes). Redirected output retains the original stable text format.
 func RenderMetricsAuto(w io.Writer, input []browser.TabInfo, key string, desc, compact bool) error {
-	width := terminalColumns(w)
+	return renderMetricsAtWidth(w, input, key, desc, compact, terminalColumns(w))
+}
+
+// RenderMetricsSnapshot formats for the *display* writer's terminal width,
+// even though it buffers the output before the caller decides whether to
+// repaint. Using a buffer as the width probe would silently disable adaptive
+// columns in watch mode.
+func RenderMetricsSnapshot(display io.Writer, input []browser.TabInfo, key string, desc, compact bool) (string, error) {
+	var output strings.Builder
+	if err := renderMetricsAtWidth(&output, input, key, desc, compact, terminalColumns(display)); err != nil {
+		return "", err
+	}
+	return output.String(), nil
+}
+
+func renderMetricsAtWidth(w io.Writer, input []browser.TabInfo, key string, desc, compact bool, width int) error {
 	if width == 0 {
 		if compact {
 			return RenderMetricsCompact(w, input, key, desc)
