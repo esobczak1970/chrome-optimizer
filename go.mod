@@ -4,7 +4,7 @@ go 1.27.4
 
 require (
 	github.com/chromedp/cdproto v0.160.3
-	github.com/chromedp/chromedp v0.23.0
+	github.com/chromedp/chromedp v0.23.1
 	gopkg.in/yaml.v3 v3.0.1
 )
 
